@@ -1,0 +1,380 @@
+/* ==========================================================================
+   STYLE.CSS — PORTAL KELAS RESMI & KAS DIGITAL (NEO-BRUTALISM + DARK MODE)
+   ========================================================================== */
+
+:root {
+    --ink: #111111;
+    --bg-cream: #FFFDF7;
+    --card-bg: #FFFFFF;
+    --surface-bg: #F4EFE6;
+    --text-main: #111111;
+    --text-muted: #525252;
+    --border-color: #111111;
+    --shadow-color: #111111;
+    --dot-color: rgba(17, 17, 17, 0.20);
+    --table-row-hover: rgba(255, 230, 0, 0.14);
+}
+
+html.dark {
+    --ink: #F8FAFC;
+    --bg-cream: #0B0F17;
+    --card-bg: #151C28;
+    --surface-bg: #1E293B;
+    --text-main: #F8FAFC;
+    --text-muted: #94A3B8;
+    --border-color: #334155;
+    --shadow-color: #020617;
+    --dot-color: rgba(255, 255, 255, 0.09);
+    --table-row-hover: rgba(56, 189, 248, 0.10);
+}
+
+/* Base Body Styling */
+body {
+    background-color: var(--bg-cream);
+    background-image: radial-gradient(var(--dot-color) 1.15px, transparent 1.15px);
+    background-size: 22px 22px;
+    color: var(--text-main);
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    overflow-x: hidden;
+    -webkit-tap-highlight-color: transparent;
+    transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+.text-muted-adaptive {
+    color: var(--text-muted);
+}
+
+/* Neo-Brutalist Cards */
+.neo-card {
+    background-color: var(--card-bg);
+    border: 3px solid var(--border-color);
+    box-shadow: 4px 4px 0px 0px var(--shadow-color);
+    border-radius: 0.85rem;
+    transition: transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1),
+                box-shadow 0.22s ease,
+                background-color 0.25s ease,
+                border-color 0.25s ease;
+}
+
+@media (min-width: 640px) {
+    .neo-card {
+        box-shadow: 5px 5px 0px 0px var(--shadow-color);
+    }
+}
+
+.neo-card-hover:hover {
+    transform: translate(-3px, -3px);
+    box-shadow: 8px 8px 0px 0px var(--shadow-color);
+}
+
+/* Neo-Brutalist Buttons */
+.neo-btn {
+    border: 2.5px solid #111111;
+    box-shadow: 3px 3px 0px 0px var(--shadow-color);
+    border-radius: 0.55rem;
+    font-weight: 800;
+    transition: all 0.14s cubic-bezier(0.2, 0, 0, 1);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    user-select: none;
+}
+
+.neo-btn:hover {
+    transform: translate(-1.5px, -1.5px);
+    box-shadow: 5px 5px 0px 0px var(--shadow-color);
+}
+
+.neo-btn:active {
+    transform: translate(2px, 2px);
+    box-shadow: 1px 1px 0px 0px var(--shadow-color);
+}
+
+.neo-btn:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+
+/* Neo-Brutalist Inputs, Selects & Textareas */
+.neo-input {
+    border: 2.5px solid var(--border-color);
+    box-shadow: 3px 3px 0px 0px var(--shadow-color);
+    border-radius: 0.55rem;
+    background-color: var(--card-bg);
+    color: var(--text-main);
+    font-weight: 600;
+    transition: all 0.15s ease;
+}
+
+.neo-input::placeholder {
+    color: var(--text-muted);
+    opacity: 0.75;
+}
+
+.neo-input:focus {
+    outline: none;
+    transform: translate(-1px, -1px);
+    box-shadow: 4px 4px 0px 0px var(--shadow-color);
+    border-color: #00BBF9;
+}
+
+/* Badges */
+.neo-badge {
+    border: 2px solid #111111;
+    box-shadow: 2px 2px 0px 0px rgba(0, 0, 0, 0.85);
+    border-radius: 0.4rem;
+    font-weight: 800;
+    font-size: 0.7rem;
+    padding: 0.15rem 0.55rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+/* ==========================================================================
+   HARMONISASI MODE GELAP (DARK MODE) MENYELURUH & SELARAS
+   ========================================================================== */
+
+html.dark header {
+    background-color: rgba(15, 23, 42, 0.95) !important;
+    border-color: #334155 !important;
+}
+
+html.dark #navDrawerPanel,
+html.dark #workspace-login,
+html.dark #workspace-admin {
+    background-color: var(--bg-cream) !important;
+    color: var(--text-main) !important;
+}
+
+html.dark .neo-card.bg-white,
+html.dark .bg-white.neo-card,
+html.dark footer#publicFooter,
+html.dark .lg\:col-span-5.bg-white {
+    background-color: var(--card-bg) !important;
+    color: var(--text-main) !important;
+    border-color: var(--border-color) !important;
+}
+
+/* Kartu Aksen Warna (Mint, Sky, Pink, Orange, Yellow) tetap cerah & teks gelap tajam */
+html.dark .kpi-accent-card,
+html.dark .neo-card.bg-neo-yellow {
+    color: #111111 !important;
+    border-color: #111111 !important;
+}
+
+html.dark .bg-neo-surface {
+    background-color: var(--surface-bg) !important;
+    color: var(--text-main) !important;
+    border-color: var(--border-color) !important;
+}
+
+html.dark .bg-neo-bg {
+    background-color: #0F172A !important;
+    color: var(--text-main) !important;
+    border-color: var(--border-color) !important;
+}
+
+/* Tombol Putih & Filter Pill di Mode Gelap agar Teks Selalu Terbaca Jelas */
+html.dark .neo-btn.bg-white:not(.active),
+html.dark .filter-pill-btn:not(.active),
+html.dark .drawer-nav-item:not(.active),
+html.dark .admin-nav-btn:not(.active) {
+    background-color: #1E293B !important;
+    color: #F8FAFC !important;
+    border-color: #475569 !important;
+}
+
+html.dark .neo-btn.bg-white:hover:not(.active),
+html.dark .filter-pill-btn:hover:not(.active),
+html.dark .drawer-nav-item:hover:not(.active),
+html.dark .admin-nav-btn:hover:not(.active) {
+    background-color: #334155 !important;
+}
+
+/* Tombol Filter / Nav yang Sedang Aktif */
+.filter-pill-btn.active,
+.drawer-nav-item.active {
+    background-color: #FFE600 !important;
+    color: #111111 !important;
+    border-color: #111111 !important;
+    transform: translate(1.5px, 1.5px);
+    box-shadow: 2px 2px 0px 0px var(--shadow-color);
+}
+
+.admin-nav-btn.active {
+    background-color: #00F5D4 !important;
+    color: #111111 !important;
+    border-color: #111111 !important;
+    transform: translate(1.5px, 1.5px);
+    box-shadow: 2px 2px 0px 0px var(--shadow-color);
+}
+
+/* Tabel di Mode Terang & Gelap */
+.neo-table tbody {
+    background-color: var(--card-bg);
+    color: var(--text-main);
+}
+
+.neo-table tbody tr:hover {
+    background-color: var(--table-row-hover);
+}
+
+html.dark .neo-table td,
+html.dark .neo-table th {
+    border-color: #334155 !important;
+}
+
+html.dark input[type="date"]::-webkit-calendar-picker-indicator,
+html.dark input[type="time"]::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+}
+
+/* ==========================================================================
+   ANIMASI MARQUEE, HERO, TYPEWRITER & PAPAN TEMPEL KERTAS
+   ========================================================================== */
+
+@keyframes marquee {
+    0% { transform: translateX(0%); }
+    100% { transform: translateX(-50%); }
+}
+
+.animate-marquee {
+    display: flex;
+    width: max-content;
+    animation: marquee 32s linear infinite;
+}
+
+.animate-marquee:hover {
+    animation-play-state: paused;
+}
+
+@keyframes heroPhotoReveal {
+    0% {
+        opacity: 0;
+        transform: scale(1.06) translateY(10px);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.hero-photo-animate {
+    animation: heroPhotoReveal 0.85s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes floatSlow {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-5px); }
+}
+
+.animate-float-slow {
+    animation: floatSlow 4.5s ease-in-out infinite;
+}
+
+/* Scroll Reveal From Bottom */
+.reveal-on-scroll {
+    opacity: 0;
+    transform: translateY(28px) scale(0.99);
+    transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+                transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    will-change: opacity, transform;
+}
+
+.reveal-on-scroll.is-visible {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+}
+
+.typewriter-cursor {
+    display: inline-block;
+    width: 3px;
+    height: 1.05em;
+    background-color: #FFE600;
+    margin-left: 4px;
+    vertical-align: middle;
+}
+
+/* Wind Sway & Stick Animations for Sticky Notes Board */
+@keyframes windSwayOdd {
+    0%, 100% { transform: rotate(-1.5deg) translateY(0px); }
+    50% { transform: rotate(1.6deg) translateY(-3px) translateX(2px); }
+}
+
+@keyframes windSwayEven {
+    0%, 100% { transform: rotate(1.4deg) translateY(0px); }
+    50% { transform: rotate(-1.7deg) translateY(-2px) translateX(-2px); }
+}
+
+@keyframes slapStickNote {
+    0% {
+        opacity: 0;
+        transform: scale(1.3) rotate(-8deg) translateY(-24px);
+    }
+    65% {
+        opacity: 1;
+        transform: scale(0.96) rotate(2deg) translateY(3px);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1) rotate(0deg) translateY(0);
+    }
+}
+
+.sticky-note-card {
+    transform-origin: top center;
+    border: 2.5px solid #111111;
+    box-shadow: 4px 5px 0px 0px rgba(17, 17, 17, 0.92);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    color: #111111 !important;
+}
+
+.sticky-note-card:nth-child(odd) {
+    animation: windSwayOdd 5.2s ease-in-out infinite;
+}
+
+.sticky-note-card:nth-child(even) {
+    animation: windSwayEven 6.1s ease-in-out infinite;
+    animation-delay: 0.6s;
+}
+
+.sticky-note-card:hover {
+    animation-play-state: paused;
+    transform: scale(1.03) rotate(0deg) !important;
+    box-shadow: 7px 8px 0px 0px #111111;
+    z-index: 20;
+}
+
+.sticky-just-added {
+    animation: slapStickNote 0.45s cubic-bezier(0.22, 1, 0.36, 1) forwards !important;
+}
+
+/* Corkboard Pattern for Sticky Wall */
+.corkboard-surface {
+    background-color: #E7DEC8;
+    background-image:
+        radial-gradient(#111111 0.85px, transparent 0.85px),
+        radial-gradient(#C8B99E 1.2px, #E7DEC8 1.2px);
+    background-size: 24px 24px;
+    background-position: 0 0, 12px 12px;
+}
+
+html.dark .corkboard-surface {
+    background-color: #1E1B18;
+    background-image:
+        radial-gradient(rgba(255, 255, 255, 0.12) 0.85px, transparent 0.85px),
+        radial-gradient(#2D2823 1.2px, #1E1B18 1.2px);
+}
+
+/* Utility Scrollbar Hide */
+.no-scrollbar::-webkit-scrollbar {
+    display: none;
+}
+
+.no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
