@@ -70,10 +70,10 @@
                 </span>
                 <div>
                     <div class="font-display font-extrabold text-xs sm:text-sm uppercase text-neo-yellow leading-tight">
-                        Mode Pratinjau Web Publik (Read-Only)
+                        Mode Pratinjau Web Publik
                     </div>
                     <p class="text-[11px] font-mono text-neutral-300">
-                        Tampilan pengunjung aktif. Edit data dikunci hanya di dalam Panel Pengurus.
+                        Anda sedang melihat tampilan pengunjung. Klik tombol di samping untuk kembali mengelola data.
                     </p>
                 </div>
             </div>
@@ -94,7 +94,7 @@
             </div>
         </div>
 
-        <!-- Main Sticky Header (Publik) dengan Logo Header Website -->
+        <!-- Main Sticky Header (Publik) dengan Logo Header Website Berfungsi Penuh -->
         <header class="sticky top-0 z-30 bg-neo-bg/95 backdrop-blur-md border-b-4 border-neo-ink px-3 sm:px-6 lg:px-8 py-2.5 transition-colors">
             <div class="max-w-7xl mx-auto flex items-center justify-between gap-2.5">
                 <!-- Kiri: Trigger Menu + Logo Header Website + Nama Kelas -->
@@ -114,7 +114,7 @@
                         title="Ketuk 3x untuk Login Pengurus"
                         class="flex items-center gap-2.5 min-w-0 cursor-pointer select-none group"
                     >
-                        <div class="w-10 h-10 sm:w-11 sm:h-11 shrink-0 bg-neo-yellow border-2.5 border-neo-ink shadow-neo-sm rounded-lg overflow-hidden flex items-center justify-center relative">
+                        <div class="w-10 h-10 sm:w-11 sm:h-11 shrink-0 bg-neo-yellow border-2.5 border-neo-ink shadow-neo-sm rounded-xl overflow-hidden flex items-center justify-center relative">
                             <img
                                 id="headerClassLogoImg"
                                 src=""
@@ -131,7 +131,7 @@
                                 <h1 id="headerClassName" class="font-display font-extrabold text-base sm:text-xl lg:text-2xl tracking-tight uppercase truncate group-active:scale-95 transition-transform">
                                     MEDIVANCE
                                 </h1>
-                                <span id="headerSchoolBadge" class="hidden md:inline-block font-mono text-[10px] font-extrabold bg-neo-surface text-neo-ink border border-neo-ink px-1.5 py-0.5 rounded truncate max-w-[180px]">
+                                <span id="headerSchoolBadge" class="hidden md:inline-block font-mono text-[10px] font-extrabold bg-neo-surface text-main-adaptive border border-neo-ink px-2 py-0.5 rounded truncate max-w-[200px]">
                                     SMA NEGERI 5 AMBON
                                 </span>
                             </div>
@@ -142,11 +142,11 @@
                     </div>
                 </div>
 
-                <!-- Kanan: Status Cloud Real-Time, Toggle Tema, Papan Tempel & Jam Digital -->
+                <!-- Kanan: Status Cloud Real-Time, Toggle Tema, NGL/Papan Tempel & Jam Digital -->
                 <div class="flex items-center gap-2 shrink-0">
-                    <span id="publicCloudBadge" class="inline-flex items-center gap-1.5 font-mono text-[10px] font-bold bg-neo-surface text-neo-ink border-2 border-neo-ink px-2 py-1 rounded-md" title="Sinkronisasi Real-Time Aktif">
+                    <span id="publicCloudBadge" class="inline-flex items-center gap-1.5 font-mono text-[10px] font-bold bg-neo-surface text-main-adaptive border-2 border-neo-ink px-2 py-1 rounded-md" title="Sinkronisasi Real-Time Aktif">
                         <span id="publicCloudDot" class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                        <span id="publicCloudText" class="hidden sm:inline">REALTIME</span>
+                        <span id="publicCloudText" class="hidden sm:inline">FAST SYNC</span>
                     </span>
 
                     <button
@@ -154,9 +154,19 @@
                         onclick="toggleDarkMode()"
                         id="btnThemeToggle"
                         aria-label="Ganti Tema"
-                        class="neo-btn bg-neo-surface text-neo-ink w-9 h-9 sm:w-10 sm:h-10 text-xs sm:text-sm"
+                        class="neo-btn bg-neo-surface text-main-adaptive w-9 h-9 sm:w-10 sm:h-10 text-xs sm:text-sm"
                     >
                         <i id="themeToggleIcon" class="fa-solid fa-moon"></i>
+                    </button>
+
+                    <button
+                        type="button"
+                        onclick="openModal('modalNglForm')"
+                        class="neo-btn bg-neo-violet text-white px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-[11px] sm:text-xs"
+                        title="Kirim Pesan Anonim NGL"
+                    >
+                        <i class="fa-solid fa-user-secret"></i>
+                        <span class="hidden sm:inline">Kirim NGL</span>
                     </button>
 
                     <button
@@ -165,7 +175,7 @@
                         class="neo-btn bg-neo-pink text-neo-ink px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-[11px] sm:text-xs"
                     >
                         <i class="fa-solid fa-note-sticky"></i>
-                        <span class="hidden sm:inline">Papan Tempel</span>
+                        <span class="hidden md:inline">Papan Tempel</span>
                     </button>
 
                     <button
@@ -178,8 +188,8 @@
                         <span>Panel Admin</span>
                     </button>
 
-                    <div class="hidden lg:flex items-center text-xs font-mono font-bold">
-                        <span id="liveClockDisplay" class="bg-neo-surface text-neo-ink border-2 border-neo-ink px-2.5 py-1.5 rounded-md shadow-neo-sm"></span>
+                    <div class="hidden xl:flex items-center text-xs font-mono font-bold">
+                        <span id="liveClockDisplay" class="bg-neo-surface text-main-adaptive border-2 border-neo-ink px-2.5 py-1.5 rounded-md shadow-neo-sm"></span>
                     </div>
                 </div>
             </div>
@@ -208,48 +218,48 @@
 
                 <!-- Navigation Links -->
                 <nav class="space-y-2" aria-label="Menu Utama Portal Kelas">
-                    <button type="button" onclick="navigateFromDrawer('dashboard')" id="drawertab-dashboard" class="drawer-nav-item active neo-btn bg-white text-neo-ink w-full justify-start px-3.5 py-2.5 text-xs sm:text-sm">
+                    <button type="button" onclick="navigateFromDrawer('dashboard')" id="drawertab-dashboard" class="drawer-nav-item active neo-btn surface-card w-full justify-start px-3.5 py-2.5 text-xs sm:text-sm">
                         <span class="w-6 text-center"><i class="fa-solid fa-house"></i></span>
                         <span>Beranda Kelas</span>
                     </button>
 
-                    <button type="button" onclick="navigateFromDrawer('keuangan')" id="drawertab-keuangan" class="drawer-nav-item neo-btn bg-white text-neo-ink w-full justify-start px-3.5 py-2.5 text-xs sm:text-sm">
-                        <span class="w-6 text-center"><i class="fa-solid fa-wallet text-emerald-600"></i></span>
+                    <button type="button" onclick="navigateFromDrawer('keuangan')" id="drawertab-keuangan" class="drawer-nav-item neo-btn surface-card w-full justify-start px-3.5 py-2.5 text-xs sm:text-sm">
+                        <span class="w-6 text-center"><i class="fa-solid fa-wallet text-emerald-500"></i></span>
                         <span>Iuran & Buku Kas</span>
                     </button>
 
-                    <button type="button" onclick="navigateFromDrawer('absensi')" id="drawertab-absensi" class="drawer-nav-item neo-btn bg-white text-neo-ink w-full justify-start px-3.5 py-2.5 text-xs sm:text-sm">
-                        <span class="w-6 text-center"><i class="fa-solid fa-clipboard-user text-lime-600"></i></span>
+                    <button type="button" onclick="navigateFromDrawer('absensi')" id="drawertab-absensi" class="drawer-nav-item neo-btn surface-card w-full justify-start px-3.5 py-2.5 text-xs sm:text-sm">
+                        <span class="w-6 text-center"><i class="fa-solid fa-clipboard-user text-lime-500"></i></span>
                         <span class="flex-1 text-left">Absensi Digital</span>
                         <span id="badgeAbsensiCount" class="bg-neo-lime text-neo-ink border border-neo-ink rounded px-1.5 text-[10px]">REKAP</span>
                     </button>
 
-                    <button type="button" onclick="navigateFromDrawer('mading')" id="drawertab-mading" class="drawer-nav-item neo-btn bg-white text-neo-ink w-full justify-start px-3.5 py-2.5 text-xs sm:text-sm">
+                    <button type="button" onclick="navigateFromDrawer('mading')" id="drawertab-mading" class="drawer-nav-item neo-btn surface-card w-full justify-start px-3.5 py-2.5 text-xs sm:text-sm">
                         <span class="w-6 text-center"><i class="fa-solid fa-note-sticky text-pink-500"></i></span>
-                        <span class="flex-1 text-left">Papan Tempel Kelas</span>
+                        <span class="flex-1 text-left">Papan Tempel & NGL</span>
                         <span id="badgeMadingCount" class="bg-neo-pink text-neo-ink border border-neo-ink rounded px-1.5 text-[10px]">0</span>
                     </button>
 
-                    <button type="button" onclick="navigateFromDrawer('info')" id="drawertab-info" class="drawer-nav-item neo-btn bg-white text-neo-ink w-full justify-start px-3.5 py-2.5 text-xs sm:text-sm">
+                    <button type="button" onclick="navigateFromDrawer('info')" id="drawertab-info" class="drawer-nav-item neo-btn surface-card w-full justify-start px-3.5 py-2.5 text-xs sm:text-sm">
                         <span class="w-6 text-center"><i class="fa-solid fa-bullhorn text-rose-500"></i></span>
                         <span class="flex-1 text-left">Pengumuman & Tugas</span>
                         <span id="badgeInfoCount" class="bg-neo-coral text-white border border-neo-ink rounded px-1.5 text-[10px]">0</span>
                     </button>
 
-                    <button type="button" onclick="navigateFromDrawer('jadwal')" id="drawertab-jadwal" class="drawer-nav-item neo-btn bg-white text-neo-ink w-full justify-start px-3.5 py-2.5 text-xs sm:text-sm">
+                    <button type="button" onclick="navigateFromDrawer('jadwal')" id="drawertab-jadwal" class="drawer-nav-item neo-btn surface-card w-full justify-start px-3.5 py-2.5 text-xs sm:text-sm">
                         <span class="w-6 text-center"><i class="fa-solid fa-calendar-day text-sky-500"></i></span>
                         <span>Jadwal & Regu Piket</span>
                     </button>
 
-                    <button type="button" onclick="navigateFromDrawer('album')" id="drawertab-album" class="drawer-nav-item neo-btn bg-white text-neo-ink w-full justify-start px-3.5 py-2.5 text-xs sm:text-sm">
+                    <button type="button" onclick="navigateFromDrawer('album')" id="drawertab-album" class="drawer-nav-item neo-btn surface-card w-full justify-start px-3.5 py-2.5 text-xs sm:text-sm">
                         <span class="w-6 text-center"><i class="fa-solid fa-camera-retro text-amber-500"></i></span>
                         <span class="flex-1 text-left">Album Kenangan</span>
                         <span id="badgeAlbumCount" class="bg-neo-violet text-white border border-neo-ink rounded px-1.5 text-[10px]">0</span>
                     </button>
 
-                    <button type="button" onclick="navigateFromDrawer('siswa')" id="drawertab-siswa" class="drawer-nav-item neo-btn bg-white text-neo-ink w-full justify-start px-3.5 py-2.5 text-xs sm:text-sm">
+                    <button type="button" onclick="navigateFromDrawer('siswa')" id="drawertab-siswa" class="drawer-nav-item neo-btn surface-card w-full justify-start px-3.5 py-2.5 text-xs sm:text-sm">
                         <span class="w-6 text-center"><i class="fa-solid fa-users text-purple-500"></i></span>
-                        <span class="flex-1 text-left">Struktur & Anggota</span>
+                        <span class="flex-1 text-left">Struktur & ID Anggota</span>
                         <span id="badgeSiswaCount" class="bg-neo-mint text-neo-ink border border-neo-ink rounded px-1.5 text-[10px]">0</span>
                     </button>
                 </nav>
@@ -268,7 +278,7 @@
                 <button
                     type="button"
                     onclick="toggleDarkMode()"
-                    class="neo-btn bg-neo-surface text-neo-ink w-full py-2 px-3.5 text-xs justify-between"
+                    class="neo-btn bg-neo-surface text-main-adaptive w-full py-2 px-3.5 text-xs justify-between"
                 >
                     <span class="flex items-center gap-2">
                         <i class="fa-solid fa-circle-half-stroke"></i>
@@ -294,26 +304,29 @@
     </div>
 
     <!-- ============================================================================ -->
-    <!-- WORKSPACE 1: PORTAL PUBLIK / SISWA (100% READ-ONLY UNTUK DATA INTI)          -->
+    <!-- WORKSPACE 1: PORTAL PUBLIK / SISWA (ANIMASI SCROLL DUA ARAH & VARIASI TAB)   -->
     <!-- ============================================================================ -->
     <main id="workspace-user" class="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-6 sm:space-y-8">
 
         <!-- ==================== VIEW 1: BERANDA UTAMA KELAS ==================== -->
-        <section id="view-dashboard" class="space-y-6 sm:space-y-8">
+        <section id="view-dashboard" class="tab-view-anim-slide space-y-6 sm:space-y-8">
 
-            <!-- HERO SHOWCASE: Foto Latar Belakang + Sambutan & Motto -->
-            <div class="neo-card overflow-hidden bg-neo-ink text-white reveal-on-scroll">
-                <div class="relative h-60 sm:h-80 lg:h-96 w-full overflow-hidden border-b-3 border-neo-ink bg-neutral-900">
+            <!-- HERO SHOWCASE BARU: FOTO SLIDESHOW PENUH DI ATAS, SEMUA TEKS DI BAWAH AGAR FOTO TERLIHAT JELAS -->
+            <div class="neo-card overflow-hidden bg-neo-ink text-white scroll-anim-card">
+                <!-- Bagian Atas: Bingkai Foto Latar Belakang Multi-Slide (Berganti Tiap 1 Menit) -->
+                <div class="relative h-64 sm:h-88 md:h-[420px] lg:h-[470px] w-full overflow-hidden border-b-4 border-neo-ink bg-neutral-950">
                     <img
                         id="heroBackgroundImg"
                         src="https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&w=1400&q=80"
                         alt="Foto Latar Kelas"
-                        class="w-full h-full object-cover object-center hero-photo-animate opacity-90"
+                        class="w-full h-full object-cover object-center transition-all duration-700"
                     >
-                    <div class="absolute inset-0 bg-gradient-to-t from-neo-ink via-neo-ink/50 to-black/25"></div>
+                    <!-- Gradasi tipis hanya di sudut atas & bawah agar foto tengah 100% terang dan jelas -->
+                    <div class="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/60 to-transparent pointer-events-none"></div>
+                    <div class="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/75 to-transparent pointer-events-none"></div>
 
-                    <!-- Top Floating Badges -->
-                    <div class="absolute top-3.5 left-3.5 right-3.5 flex flex-wrap items-center justify-between gap-2">
+                    <!-- Top Floating Badges (Pojok Atas Foto) -->
+                    <div class="absolute top-3.5 left-3.5 right-3.5 flex flex-wrap items-center justify-between gap-2 z-10">
                         <div class="flex flex-wrap items-center gap-2">
                             <span id="heroAcademicYear" class="neo-badge bg-neo-yellow text-neo-ink">
                                 <i class="fa-solid fa-graduation-cap"></i> Semester Ganjil • TA 2026/2027
@@ -323,41 +336,57 @@
                             </span>
                         </div>
                         <span class="neo-badge bg-neo-mint text-neo-ink font-mono">
-                            <i class="fa-solid fa-star"></i> OFFICIAL CLASS PORTAL
+                            <i class="fa-solid fa-camera"></i> <span id="heroSlideCounterText">SLIDE 1/1</span>
                         </span>
                     </div>
 
-                    <!-- Bottom Overlay Tagline & Motto on Photo -->
-                    <div class="absolute bottom-3.5 left-4 right-4 flex flex-col sm:flex-row sm:items-end justify-between gap-3">
-                        <div class="flex items-center gap-3">
-                            <div id="heroLogoBadge" class="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-neo-yellow text-neo-ink border-2.5 border-neo-ink shadow-neo-sm flex items-center justify-center font-display font-extrabold text-sm sm:text-base overflow-hidden shrink-0 animate-float-slow">
-                                <img id="heroSmallLogoImg" src="" alt="Logo" class="hidden w-full h-full object-cover">
-                                <span id="heroSmallLogoCode">MDV</span>
-                            </div>
-                            <div>
-                                <span id="heroMottoBadge" class="font-mono text-[11px] sm:text-xs uppercase tracking-widest text-neo-mint font-extrabold block">
-                                    "TOGETHER WE GROW, TOGETHER WE HEAL"
-                                </span>
-                                <h2 id="heroClassIdentityTitle" class="font-display font-extrabold text-xl sm:text-3xl uppercase tracking-tight text-white leading-none mt-0.5">
-                                    KELAS MEDIVANCE
-                                </h2>
-                            </div>
+                    <!-- Navigasi & Indikator Multi-Foto Latar (Pojok Kanan Bawah Foto) -->
+                    <div class="absolute bottom-3.5 left-4 right-4 flex items-center justify-between gap-2 z-10">
+                        <div class="inline-flex items-center gap-2 bg-black/65 backdrop-blur-xs border border-white/25 px-3 py-1 rounded-full">
+                            <span class="w-2 h-2 rounded-full bg-neo-mint animate-ping"></span>
+                            <span id="heroMottoBadge" class="font-mono text-[10px] sm:text-xs uppercase tracking-widest text-neo-yellow font-extrabold">
+                                "TOGETHER WE GROW, TOGETHER WE HEAL"
+                            </span>
+                        </div>
+
+                        <div id="heroSlideshowControls" class="flex items-center gap-1.5">
+                            <button type="button" onclick="stepHeroSlide(-1)" class="neo-btn bg-white/90 text-neo-ink w-7 h-7 text-xs" title="Foto Sebelumnya">
+                                <i class="fa-solid fa-chevron-left"></i>
+                            </button>
+                            <div id="heroSlideDots" class="flex items-center gap-1 px-1"></div>
+                            <button type="button" onclick="stepHeroSlide(1)" class="neo-btn bg-white/90 text-neo-ink w-7 h-7 text-xs" title="Foto Berikutnya">
+                                <i class="fa-solid fa-chevron-right"></i>
+                            </button>
                         </div>
                     </div>
                 </div>
 
-                <!-- Bottom Typewriter Welcome Section -->
-                <div class="p-5 sm:p-7 bg-neo-ink text-white flex flex-col lg:flex-row lg:items-center justify-between gap-5">
-                    <div class="space-y-2.5 max-w-2xl">
-                        <div class="inline-flex items-center gap-2 px-2.5 py-1 rounded bg-white/10 border border-white/20 text-[11px] font-mono font-bold text-neo-yellow uppercase tracking-wider">
-                            <i class="fa-solid fa-heart-pulse text-neo-coral"></i>
-                            <span id="heroMottoSubtext">Together We Grow, Together We Heal</span>
+                <!-- Bagian Bawah Foto: Identitas Kelas, Efek Mengetik Berulang (Looping Typewriter) & Tombol Aksi -->
+                <div class="p-5 sm:p-7 bg-neo-ink text-white flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                    <div class="space-y-3 max-w-2xl">
+                        <div class="flex items-center gap-3">
+                            <div id="heroLogoBadge" class="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-neo-yellow text-neo-ink border-2.5 border-white shadow-neo-sm flex items-center justify-center font-display font-extrabold text-sm sm:text-base overflow-hidden shrink-0 animate-float-slow">
+                                <img id="heroSmallLogoImg" src="" alt="Logo Kelas" class="hidden w-full h-full object-cover">
+                                <span id="heroSmallLogoCode">MDV</span>
+                            </div>
+                            <div>
+                                <div class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-white/10 border border-white/20 text-[10px] font-mono font-bold text-neo-mint uppercase tracking-wider">
+                                    <i class="fa-solid fa-heart-pulse text-neo-coral"></i>
+                                    <span id="heroMottoSubtext">Together We Grow, Together We Heal</span>
+                                </div>
+                                <h2 id="heroClassIdentityTitle" class="font-display font-extrabold text-lg sm:text-2xl uppercase tracking-tight text-white leading-none mt-1">
+                                    KELAS MEDIVANCE
+                                </h2>
+                            </div>
                         </div>
-                        <div class="min-h-[2.4rem] sm:min-h-[3rem] flex items-center">
-                            <h3 class="font-display font-extrabold text-xl sm:text-3xl lg:text-4xl tracking-tight uppercase text-neo-yellow leading-tight">
-                                <span id="typewriterTextTarget">SELAMAT DATANG DI MEDIVANCE</span><span class="typewriter-cursor"></span>
+
+                        <!-- Area Teks Efek Mengetik Berulang (Looping Typewriter) -->
+                        <div class="min-h-[2.6rem] sm:min-h-[3.2rem] flex items-center bg-white/5 border-l-4 border-neo-yellow pl-3.5 py-1 rounded-r-lg">
+                            <h3 class="font-display font-extrabold text-lg sm:text-2xl lg:text-3xl tracking-tight uppercase text-neo-yellow leading-tight">
+                                <span id="typewriterTextTarget"></span><span class="typewriter-cursor"></span>
                             </h3>
                         </div>
+
                         <p id="heroWelcomeDesc" class="text-xs sm:text-sm font-medium text-neutral-300 leading-relaxed">
                             Keluarga besar penuh semangat kolaborasi, kepedulian, dan prestasi akademik yang tumbuh bersama dalam satu kesatuan.
                         </p>
@@ -368,19 +397,19 @@
                         <button type="button" onclick="switchTab('keuangan')" class="neo-btn bg-neo-yellow text-neo-ink px-4 py-2.5 text-xs sm:text-sm">
                             <i class="fa-solid fa-wallet"></i> Buku Kas & Iuran
                         </button>
-                        <button type="button" onclick="switchTab('absensi')" class="neo-btn bg-neo-lime text-neo-ink px-4 py-2.5 text-xs sm:text-sm">
-                            <i class="fa-solid fa-clipboard-user"></i> Absensi Digital
+                        <button type="button" onclick="openModal('modalNglForm')" class="neo-btn bg-neo-pink text-neo-ink px-4 py-2.5 text-xs sm:text-sm">
+                            <i class="fa-solid fa-user-secret"></i> Kirim NGL Anonim
                         </button>
                         <button type="button" onclick="switchTab('siswa')" class="neo-btn bg-neo-sky text-neo-ink px-4 py-2.5 text-xs sm:text-sm">
-                            <i class="fa-solid fa-id-card"></i> Profil & Struktur
+                            <i class="fa-solid fa-id-card"></i> ID Card Anggota
                         </button>
                     </div>
                 </div>
             </div>
 
             <!-- PROFIL & TENTANG KELAS SECTION -->
-            <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 reveal-on-scroll">
-                <div class="lg:col-span-7 neo-card bg-white p-5 sm:p-6 flex flex-col justify-between space-y-4">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 scroll-anim-card">
+                <div class="lg:col-span-7 neo-card surface-card p-5 sm:p-6 flex flex-col justify-between space-y-4">
                     <div class="space-y-2.5">
                         <div class="flex flex-wrap items-center justify-between gap-2">
                             <span class="neo-badge bg-neo-yellow text-neo-ink">
@@ -439,20 +468,20 @@
                         <button type="button" onclick="switchTab('siswa')" class="text-xs font-extrabold underline">Lihat Struktur →</button>
                     </div>
 
-                    <div id="dashboardWaliCard" class="bg-white border-2.5 border-neo-ink shadow-neo-sm rounded-xl p-4 flex items-center gap-3.5">
-                        <!-- Diisi via kelas.js -->
+                    <div id="dashboardWaliCard" class="surface-card border-2.5 border-neo-ink shadow-neo-sm rounded-xl p-4 flex items-center gap-3.5">
+                        <!-- Diisi via user.js -->
                     </div>
 
                     <div class="grid grid-cols-3 gap-2.5 text-center">
-                        <div class="bg-white border-2 border-neo-ink rounded-lg p-2.5">
+                        <div class="surface-card border-2 border-neo-ink rounded-lg p-2.5">
                             <div id="statCountStudents" class="font-mono font-extrabold text-lg sm:text-xl">0</div>
                             <div class="text-[10px] font-extrabold uppercase text-muted-adaptive">Anggota</div>
                         </div>
-                        <div class="bg-white border-2 border-neo-ink rounded-lg p-2.5">
+                        <div class="surface-card border-2 border-neo-ink rounded-lg p-2.5">
                             <div id="statCountOfficers" class="font-mono font-extrabold text-lg sm:text-xl">0</div>
                             <div class="text-[10px] font-extrabold uppercase text-muted-adaptive">Pengurus</div>
                         </div>
-                        <div class="bg-white border-2 border-neo-ink rounded-lg p-2.5">
+                        <div class="surface-card border-2 border-neo-ink rounded-lg p-2.5">
                             <div id="statCountAlbums" class="font-mono font-extrabold text-lg sm:text-xl">0</div>
                             <div class="text-[10px] font-extrabold uppercase text-muted-adaptive">Dokumentasi</div>
                         </div>
@@ -461,7 +490,7 @@
             </div>
 
             <!-- 4 KPI Summary Cards -->
-            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5 reveal-on-scroll">
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5 scroll-anim-card">
                 <div onclick="switchTab('keuangan')" class="cursor-pointer neo-card neo-card-hover kpi-accent-card bg-neo-mint p-4 sm:p-5 text-neo-ink">
                     <div class="flex items-center justify-between gap-1 mb-2">
                         <span class="font-mono text-[10px] sm:text-xs font-extrabold uppercase bg-white text-neo-ink border-2 border-neo-ink px-1.5 py-0.5 rounded">SALDO KAS AKTIF</span>
@@ -471,7 +500,7 @@
                     <p class="text-[11px] font-bold mt-1 opacity-85">Dana kas tersedia saat ini</p>
                 </div>
 
-                <div onclick="switchTab('keuangan')" class="cursor-pointer neo-card neo-card-hover bg-white p-4 sm:p-5">
+                <div onclick="switchTab('keuangan')" class="cursor-pointer neo-card neo-card-hover surface-card p-4 sm:p-5">
                     <div class="flex items-center justify-between gap-1 mb-2">
                         <span class="font-mono text-[10px] sm:text-xs font-extrabold uppercase bg-neo-lime text-neo-ink border-2 border-neo-ink px-1.5 py-0.5 rounded">TOTAL MASUK</span>
                         <i class="fa-solid fa-arrow-trend-up text-emerald-500 text-sm sm:text-base"></i>
@@ -480,7 +509,7 @@
                     <p id="kpiPersenLunas" class="text-[11px] font-bold text-muted-adaptive mt-1 truncate">Akumulasi iuran & kas</p>
                 </div>
 
-                <div onclick="switchTab('keuangan')" class="cursor-pointer neo-card neo-card-hover bg-white p-4 sm:p-5">
+                <div onclick="switchTab('keuangan')" class="cursor-pointer neo-card neo-card-hover surface-card p-4 sm:p-5">
                     <div class="flex items-center justify-between gap-1 mb-2">
                         <span class="font-mono text-[10px] sm:text-xs font-extrabold uppercase bg-neo-coral text-white border-2 border-neo-ink px-1.5 py-0.5 rounded">PENGELUARAN</span>
                         <i class="fa-solid fa-arrow-trend-down text-rose-500 text-sm sm:text-base"></i>
@@ -502,8 +531,8 @@
             </div>
 
             <!-- Cek Cepat Kartu Iuran Siswa & Pengumuman/Piket -->
-            <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch reveal-on-scroll">
-                <div class="lg:col-span-5 neo-card bg-white p-5 flex flex-col justify-between">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch scroll-anim-card">
+                <div class="lg:col-span-5 neo-card surface-card p-5 flex flex-col justify-between">
                     <div>
                         <div class="flex items-center justify-between gap-2 mb-2">
                             <span class="neo-badge bg-neo-violet text-white">
@@ -511,9 +540,9 @@
                             </span>
                             <span id="quickCheckFeeLabel" class="font-mono text-xs font-extrabold text-muted-adaptive">Rp 0 / Senin</span>
                         </div>
-                        <h3 class="font-display font-extrabold text-lg uppercase">Status Iuran Kas Mingguan</h3>
+                        <h3 class="font-display font-extrabold text-lg uppercase">Cek Status Iuran Mingguan</h3>
                         <p class="text-xs font-semibold text-muted-adaptive mb-3">
-                            Cari nama atau nomor absen anggota kelas untuk melihat rekapitulasi pelunasan kas.
+                            Ketik nama atau nomor absen anggota untuk membuka Passbook Kas Digital.
                         </p>
                         <div class="relative mb-3">
                             <input
@@ -527,33 +556,38 @@
                         </div>
                     </div>
 
-                    <div id="quickCheckResult" class="bg-neo-surface border-2.5 border-neo-ink rounded-lg p-3.5 min-h-[125px] flex flex-col justify-center">
-                        <!-- Diisi via kelas.js -->
+                    <div id="quickCheckResult" class="bg-neo-surface border-2.5 border-neo-ink rounded-xl p-3.5 min-h-[125px] flex flex-col justify-center">
+                        <!-- Diisi via user.js -->
                     </div>
                 </div>
 
-                <!-- Pengumuman & Tugas Terdekat (7 Cols) -->
-                <div class="lg:col-span-7 neo-card bg-white p-5 flex flex-col justify-between space-y-4">
+                <!-- Pengumuman, Tugas & Saluran WA MEDIVANCE INFO (7 Cols) -->
+                <div class="lg:col-span-7 neo-card surface-card p-5 flex flex-col justify-between space-y-4">
                     <div>
-                        <div class="flex items-center justify-between gap-2 pb-3 border-b-3 border-neo-ink">
+                        <div class="flex flex-wrap items-center justify-between gap-2 pb-3 border-b-3 border-neo-ink">
                             <div class="flex items-center gap-2">
                                 <span class="w-8 h-8 bg-neo-coral text-white border-2 border-neo-ink rounded flex items-center justify-center font-bold text-xs">
                                     <i class="fa-solid fa-bullhorn"></i>
                                 </span>
                                 <div>
                                     <h3 class="font-display font-extrabold text-base sm:text-lg uppercase leading-none">Papan Pengumuman & Tugas</h3>
-                                    <span class="text-[11px] font-semibold text-muted-adaptive">Agenda & informasi akademik kelas</span>
+                                    <span class="text-[11px] font-semibold text-muted-adaptive">Terintegrasi dengan Saluran WA MEDIVANCE INFO</span>
                                 </div>
                             </div>
-                            <button type="button" onclick="switchTab('info')" class="neo-btn bg-neo-surface text-neo-ink px-2.5 py-1 text-xs">
-                                Selengkapnya <i class="fa-solid fa-arrow-right"></i>
-                            </button>
+                            <div class="flex items-center gap-1.5">
+                                <a id="dashboardWaChannelBtn" href="#" target="_blank" rel="noopener noreferrer" class="hidden neo-btn bg-neo-lime text-neo-ink px-2.5 py-1 text-[11px]">
+                                    <i class="fa-brands fa-whatsapp"></i> MEDIVANCE INFO
+                                </a>
+                                <button type="button" onclick="switchTab('info')" class="neo-btn bg-neo-surface text-main-adaptive px-2.5 py-1 text-xs">
+                                    Semua <i class="fa-solid fa-arrow-right"></i>
+                                </button>
+                            </div>
                         </div>
                         <div id="dashboardAnnouncementsList" class="space-y-2.5 mt-3"></div>
                     </div>
 
                     <!-- Baris Bawah: Piket Hari Ini -->
-                    <div class="bg-neo-surface border-2.5 border-neo-ink rounded-lg p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div class="bg-neo-surface border-2.5 border-neo-ink rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div class="flex items-center gap-2.5">
                             <span class="w-9 h-9 bg-neo-yellow text-neo-ink border-2 border-neo-ink rounded-lg flex items-center justify-center font-bold text-sm shrink-0">
                                 <i class="fa-solid fa-broom"></i>
@@ -568,8 +602,8 @@
                 </div>
             </div>
 
-            <!-- FITUR BARU: SOROTAN ALBUM KENANGAN DI BERANDA UTAMA -->
-            <div class="neo-card bg-white p-5 sm:p-6 space-y-4 reveal-on-scroll">
+            <!-- SOROTAN ALBUM KENANGAN DI BERANDA UTAMA -->
+            <div class="neo-card surface-card p-5 sm:p-6 space-y-4 scroll-anim-card">
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b-3 border-neo-ink">
                     <div class="flex items-center gap-3">
                         <div class="w-10 h-10 bg-neo-orange text-neo-ink border-2 border-neo-ink rounded-lg flex items-center justify-center font-bold text-base shrink-0 shadow-neo-sm">
@@ -590,34 +624,35 @@
                     </button>
                 </div>
 
-                <div id="dashboardAlbumShowcaseGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <!-- Diisi otomatis oleh kelas.js -->
-                </div>
+                <div id="dashboardAlbumShowcaseGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"></div>
             </div>
 
-            <!-- HIGHLIGHT PAPAN TEMPEL KERTAS WARNA-WARNI -->
-            <div class="neo-card corkboard-surface p-4 sm:p-6 space-y-4 reveal-on-scroll">
-                <div class="bg-white border-3 border-neo-ink shadow-neo-sm rounded-xl p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <!-- HIGHLIGHT PAPAN TEMPEL & PESAN ANONIM NGL (24 JAM) -->
+            <div class="neo-card corkboard-surface p-4 sm:p-6 space-y-4 scroll-anim-card">
+                <div class="surface-card border-3 border-neo-ink shadow-neo-sm rounded-xl p-3.5 sm:p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
                     <div class="flex items-center gap-3">
                         <div class="w-10 h-10 bg-neo-pink text-neo-ink border-2 border-neo-ink rounded-lg flex items-center justify-center font-bold text-base shrink-0">
                             <i class="fa-solid fa-thumbtack"></i>
                         </div>
                         <div>
-                            <div class="flex items-center gap-2">
-                                <h3 class="font-display font-extrabold text-base sm:text-lg uppercase">Papan Tempel Kelas</h3>
-                                <span class="neo-badge bg-neo-yellow text-neo-ink text-[10px]">Dinding Pesan</span>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <h3 class="font-display font-extrabold text-base sm:text-lg uppercase">Papan Tempel & Pesan NGL Kelas</h3>
+                                <span class="neo-badge bg-neo-violet text-white text-[10px]"><i class="fa-solid fa-user-secret"></i> NGL Anonim 24 Jam</span>
                             </div>
                             <p class="text-xs font-semibold text-muted-adaptive">
-                                Bagikan pesan semangat, apresiasi, salam, atau catatan positif untuk keluarga kelas.
+                                Kirim pesan tempel terbuka atau pesan rahasia anonim (NGL bertahan 24 jam & dapat dibagikan pengurus ke Story IG).
                             </p>
                         </div>
                     </div>
-                    <div class="flex items-center gap-2 shrink-0">
-                        <button type="button" onclick="openModal('modalStickyNoteForm')" class="neo-btn bg-neo-yellow text-neo-ink px-3.5 py-2 text-xs">
-                            <i class="fa-solid fa-plus"></i> Tempel Pesan
+                    <div class="flex flex-wrap items-center gap-2 shrink-0">
+                        <button type="button" onclick="openModal('modalNglForm')" class="neo-btn bg-neo-violet text-white px-3.5 py-2 text-xs">
+                            <i class="fa-solid fa-user-secret"></i> Kirim NGL Anonim
                         </button>
-                        <button type="button" onclick="switchTab('mading')" class="neo-btn bg-neo-surface text-neo-ink px-3 py-2 text-xs">
-                            Lihat Semua
+                        <button type="button" onclick="openModal('modalStickyNoteForm')" class="neo-btn bg-neo-yellow text-neo-ink px-3.5 py-2 text-xs">
+                            <i class="fa-solid fa-plus"></i> Tempel Kertas
+                        </button>
+                        <button type="button" onclick="switchTab('mading')" class="neo-btn bg-neo-surface text-main-adaptive px-3 py-2 text-xs">
+                            Semua
                         </button>
                     </div>
                 </div>
@@ -626,9 +661,9 @@
             </div>
         </section>
 
-        <!-- ==================== VIEW 2: KEUANGAN & CEK IURAN (READ-ONLY) ==================== -->
-        <section id="view-keuangan" class="hidden space-y-6">
-            <div class="neo-card kpi-accent-card bg-neo-mint text-neo-ink p-5 sm:p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 reveal-on-scroll">
+        <!-- ==================== VIEW 2: KEUANGAN & TABEL IURAN TANGGAL VERTIKAL ==================== -->
+        <section id="view-keuangan" class="hidden tab-view-anim-pop space-y-6">
+            <div class="neo-card kpi-accent-card bg-neo-mint text-neo-ink p-5 sm:p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 scroll-anim-card">
                 <div>
                     <div class="flex flex-wrap items-center gap-2 mb-1.5">
                         <span class="neo-badge bg-white text-neo-ink"><i class="fa-solid fa-scale-balanced"></i> LAPORAN KEUANGAN KELAS</span>
@@ -642,7 +677,7 @@
                 </div>
                 <div class="flex flex-wrap items-center gap-2">
                     <button type="button" onclick="downloadOfficialExcelSheet('ALL')" class="neo-btn bg-neo-yellow text-neo-ink px-3.5 py-2 text-xs">
-                        <i class="fa-solid fa-file-excel"></i> Unduh Sheet Resmi Kop 2 Logo (.xls)
+                        <i class="fa-solid fa-file-excel"></i> Unduh Sheet Estetik Kop 2 Logo (.xls)
                     </button>
                     <button type="button" onclick="exportIuranCSV()" class="neo-btn bg-white text-neo-ink px-3 py-2 text-xs">
                         <i class="fa-solid fa-file-csv"></i> CSV Iuran
@@ -653,11 +688,11 @@
                 </div>
             </div>
 
-            <div class="neo-card bg-white p-4 sm:p-6 space-y-4 reveal-on-scroll">
+            <div class="neo-card surface-card p-4 sm:p-6 space-y-4 scroll-anim-card">
                 <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b-3 border-neo-ink">
                     <div>
                         <h3 class="font-display font-extrabold text-lg uppercase">Tabel Pelunasan Kas Hari Senin</h3>
-                        <p class="text-xs font-semibold text-muted-adaptive">Klik nama anggota untuk melihat rincian kartu iuran digital masing-masing.</p>
+                        <p class="text-xs font-semibold text-muted-adaptive">Klik nama anggota untuk membuka Kartu Passbook Iuran Digital.</p>
                     </div>
                     <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
                         <div class="relative flex-1 sm:w-60">
@@ -697,7 +732,7 @@
             </div>
 
             <!-- Buku Mutasi Kas Umum -->
-            <div class="neo-card bg-white p-4 sm:p-6 space-y-4 reveal-on-scroll">
+            <div class="neo-card surface-card p-4 sm:p-6 space-y-4 scroll-anim-card">
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b-3 border-neo-ink">
                     <div>
                         <h3 class="font-display font-extrabold text-lg uppercase">Buku Mutasi Kas Kelas</h3>
@@ -728,8 +763,8 @@
         </section>
 
         <!-- ==================== VIEW 3: ABSENSI DIGITAL PUBLIK (HARI, MINGGU & BULAN) ==================== -->
-        <section id="view-absensi" class="hidden space-y-6">
-            <div class="neo-card kpi-accent-card bg-neo-lime text-neo-ink p-5 sm:p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-4 reveal-on-scroll">
+        <section id="view-absensi" class="hidden tab-view-anim-flip space-y-6">
+            <div class="neo-card kpi-accent-card bg-neo-lime text-neo-ink p-5 sm:p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-4 scroll-anim-card">
                 <div>
                     <div class="flex flex-wrap items-center gap-2 mb-1.5">
                         <span class="neo-badge bg-white text-neo-ink"><i class="fa-solid fa-clipboard-user"></i> PRESENSI & KEHADIRAN SISWA</span>
@@ -760,8 +795,7 @@
                 </div>
             </div>
 
-            <!-- Bar Kontrol Filter Tanggal / Minggu / Bulan -->
-            <div class="neo-card bg-white p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div class="neo-card surface-card p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 scroll-anim-card">
                 <div class="flex flex-wrap items-center gap-3">
                     <div id="pubAttFilterDailyWrap" class="flex items-center gap-2">
                         <label class="font-display font-extrabold text-xs uppercase">Pilih Tanggal:</label>
@@ -774,7 +808,7 @@
                     </div>
 
                     <div id="pubAttFilterWeeklyWrap" class="hidden flex items-center gap-2">
-                        <label class="font-display font-extrabold text-xs uppercase">Pilih Tanggal di Minggu Tersebut:</label>
+                        <label class="font-display font-extrabold text-xs uppercase">Pilih Tanggal di Minggu Ini:</label>
                         <input
                             type="date"
                             id="publicAttendanceWeekInput"
@@ -810,8 +844,7 @@
                 </div>
             </div>
 
-            <!-- 4 KPI Kehadiran sesuai Periode Terpilih -->
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3.5 scroll-anim-card">
                 <div class="neo-card kpi-accent-card bg-neo-lime p-4 text-neo-ink">
                     <span class="font-mono text-[10px] font-extrabold uppercase bg-white text-neo-ink px-2 py-0.5 rounded border border-neo-ink">HADIR (H)</span>
                     <div id="pubAttCountH" class="font-mono font-extrabold text-2xl sm:text-3xl mt-1">0</div>
@@ -834,8 +867,7 @@
                 </div>
             </div>
 
-            <!-- Tabel Absensi Dinamis -->
-            <div class="neo-card bg-white p-4 sm:p-6 space-y-4">
+            <div class="neo-card surface-card p-4 sm:p-6 space-y-4 scroll-anim-card">
                 <div class="overflow-x-auto border-3 border-neo-ink rounded-lg">
                     <table class="w-full text-left border-collapse neo-table">
                         <thead id="pubAttTableHead" class="bg-neo-ink text-white font-mono text-[11px] uppercase"></thead>
@@ -845,54 +877,69 @@
             </div>
         </section>
 
-        <!-- ==================== VIEW 4: PAPAN TEMPEL KERTAS WARNA-WARNI ==================== -->
-        <section id="view-mading" class="hidden space-y-6">
-            <div class="neo-card kpi-accent-card bg-neo-pink text-neo-ink p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 reveal-on-scroll">
+        <!-- ==================== VIEW 4: PAPAN TEMPEL & PESAN ANONIM NGL (24 JAM) ==================== -->
+        <section id="view-mading" class="hidden tab-view-anim-zoom space-y-6">
+            <div class="neo-card kpi-accent-card bg-neo-pink text-neo-ink p-5 sm:p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 scroll-anim-card">
                 <div>
-                    <span class="neo-badge bg-white text-neo-ink mb-1.5">
-                        <i class="fa-solid fa-thumbtack"></i> DINDING EKSPRESI & APRESIASI
-                    </span>
-                    <h2 class="font-display font-extrabold text-xl sm:text-2xl uppercase">Papan Tempel Kertas Kelas</h2>
+                    <div class="flex flex-wrap items-center gap-2 mb-1.5">
+                        <span class="neo-badge bg-white text-neo-ink">
+                            <i class="fa-solid fa-thumbtack"></i> DINDING EKSPRESI & NGL KELAS
+                        </span>
+                        <span class="neo-badge bg-neo-violet text-white">
+                            <i class="fa-solid fa-clock"></i> NGL Bertahan 24 Jam
+                        </span>
+                    </div>
+                    <h2 class="font-display font-extrabold text-xl sm:text-2xl uppercase">Papan Tempel & Kotak NGL Anonim</h2>
                     <p class="text-xs sm:text-sm font-semibold opacity-90 mt-0.5">
-                        Ruang berbagi catatan semangat, pengingat bersama, dan pesan hangat antar teman sekelas.
+                        Tempelkan catatan terbuka atau kirim pesan anonim (NGL) yang otomatis terhapus dalam 24 jam.
                     </p>
                 </div>
-                <button type="button" onclick="openModal('modalStickyNoteForm')" class="neo-btn bg-neo-yellow text-neo-ink px-4 py-3 text-xs sm:text-sm shrink-0">
-                    <i class="fa-solid fa-note-sticky"></i> + Tempel Kertas Baru
-                </button>
+                <div class="flex flex-wrap items-center gap-2.5 shrink-0">
+                    <button type="button" onclick="openModal('modalNglForm')" class="neo-btn bg-neo-violet text-white px-4 py-3 text-xs sm:text-sm">
+                        <i class="fa-solid fa-user-secret"></i> + Kirim Pesan NGL Anonim
+                    </button>
+                    <button type="button" onclick="openModal('modalStickyNoteForm')" class="neo-btn bg-neo-yellow text-neo-ink px-4 py-3 text-xs sm:text-sm">
+                        <i class="fa-solid fa-note-sticky"></i> + Tempel Kertas Biasa
+                    </button>
+                </div>
             </div>
 
-            <div class="neo-card corkboard-surface p-5 sm:p-8 min-h-[420px] reveal-on-scroll">
+            <div class="neo-card corkboard-surface p-5 sm:p-8 min-h-[420px] scroll-anim-card">
                 <div id="fullStickyWallGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5"></div>
             </div>
         </section>
 
-        <!-- ==================== VIEW 5: INFO UMUM & TUGAS (DENGAN LAMPIRAN FOTO & AUTO-EXPIRE) ==================== -->
-        <section id="view-info" class="hidden space-y-5">
-            <div class="neo-card bg-neo-violet text-white p-5 sm:p-6 reveal-on-scroll">
-                <span class="neo-badge bg-neo-yellow text-neo-ink mb-1.5">
-                    <i class="fa-solid fa-bullhorn"></i> PAPAN INFORMASI & TUGAS RESMI
-                </span>
-                <h2 class="font-display font-extrabold text-xl sm:text-2xl uppercase">Pengumuman, Agenda & Tugas Kelas</h2>
-                <p class="text-xs sm:text-sm font-semibold text-white/90 mt-0.5">
-                    Informasi tugas mata pelajaran, lampiran foto soal/materi, dan kegiatan bersama kelas.
-                </p>
+        <!-- ==================== VIEW 5: INFO UMUM, TUGAS & SALURAN WA MEDIVANCE INFO ==================== -->
+        <section id="view-info" class="hidden tab-view-anim-slide space-y-5">
+            <div class="neo-card bg-neo-violet text-white p-5 sm:p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 scroll-anim-card">
+                <div>
+                    <span class="neo-badge bg-neo-yellow text-neo-ink mb-1.5">
+                        <i class="fa-solid fa-bullhorn"></i> PAPAN INFORMASI & TUGAS RESMI
+                    </span>
+                    <h2 class="font-display font-extrabold text-xl sm:text-2xl uppercase">Pengumuman, Agenda & Tugas Kelas</h2>
+                    <p class="text-xs sm:text-sm font-semibold text-white/90 mt-0.5">
+                        Informasi tugas mata pelajaran, foto materi, dan tautan langsung ke Saluran WhatsApp Resmi **MEDIVANCE INFO**.
+                    </p>
+                </div>
+                <a id="infoHeaderWaChannelBtn" href="#" target="_blank" rel="noopener noreferrer" class="hidden neo-btn bg-neo-lime text-neo-ink px-4 py-3 text-xs sm:text-sm shrink-0">
+                    <i class="fa-brands fa-whatsapp text-base"></i> Gabung Saluran: MEDIVANCE INFO
+                </a>
             </div>
 
             <div class="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
                 <button type="button" onclick="filterInfoCategory('ALL')" id="infoCat-ALL" class="filter-pill-btn active neo-btn bg-neo-yellow text-neo-ink px-3.5 py-2 text-xs shrink-0">Semua</button>
-                <button type="button" onclick="filterInfoCategory('TUGAS')" id="infoCat-TUGAS" class="filter-pill-btn neo-btn bg-white text-neo-ink px-3.5 py-2 text-xs shrink-0">📚 Tugas & PR</button>
-                <button type="button" onclick="filterInfoCategory('PENTING')" id="infoCat-PENTING" class="filter-pill-btn neo-btn bg-white text-neo-ink px-3.5 py-2 text-xs shrink-0">🚨 Penting</button>
-                <button type="button" onclick="filterInfoCategory('EVENT')" id="infoCat-EVENT" class="filter-pill-btn neo-btn bg-white text-neo-ink px-3.5 py-2 text-xs shrink-0">🎉 Kegiatan</button>
-                <button type="button" onclick="filterInfoCategory('KAS')" id="infoCat-KAS" class="filter-pill-btn neo-btn bg-white text-neo-ink px-3.5 py-2 text-xs shrink-0">💰 Info Kas</button>
+                <button type="button" onclick="filterInfoCategory('TUGAS')" id="infoCat-TUGAS" class="filter-pill-btn neo-btn surface-card px-3.5 py-2 text-xs shrink-0">📚 Tugas & PR</button>
+                <button type="button" onclick="filterInfoCategory('PENTING')" id="infoCat-PENTING" class="filter-pill-btn neo-btn surface-card px-3.5 py-2 text-xs shrink-0">🚨 Penting</button>
+                <button type="button" onclick="filterInfoCategory('EVENT')" id="infoCat-EVENT" class="filter-pill-btn neo-btn surface-card px-3.5 py-2 text-xs shrink-0">🎉 Kegiatan</button>
+                <button type="button" onclick="filterInfoCategory('KAS')" id="infoCat-KAS" class="filter-pill-btn neo-btn surface-card px-3.5 py-2 text-xs shrink-0">💰 Info Kas</button>
             </div>
 
             <div id="infoCardsGrid" class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5"></div>
         </section>
 
         <!-- ==================== VIEW 6: JADWAL PELAJARAN & PIKET ==================== -->
-        <section id="view-jadwal" class="hidden space-y-6">
-            <div class="neo-card kpi-accent-card bg-neo-sky text-neo-ink p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 reveal-on-scroll">
+        <section id="view-jadwal" class="hidden tab-view-anim-pop space-y-6">
+            <div class="neo-card kpi-accent-card bg-neo-sky text-neo-ink p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 scroll-anim-card">
                 <div>
                     <span class="neo-badge bg-white text-neo-ink mb-1.5">
                         <i class="fa-solid fa-calendar-check"></i> AKADEMIK & PIKET HARIAN
@@ -901,18 +948,18 @@
                 </div>
                 <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1">
                     <button type="button" onclick="selectScheduleDay('ALL')" class="day-filter-btn filter-pill-btn active neo-btn bg-neo-yellow text-neo-ink px-3 py-1.5 text-xs shrink-0" data-day="ALL">Semua</button>
-                    <button type="button" onclick="selectScheduleDay('Senin')" class="day-filter-btn filter-pill-btn neo-btn bg-white text-neo-ink px-3 py-1.5 text-xs shrink-0" data-day="Senin">Senin</button>
-                    <button type="button" onclick="selectScheduleDay('Selasa')" class="day-filter-btn filter-pill-btn neo-btn bg-white text-neo-ink px-3 py-1.5 text-xs shrink-0" data-day="Selasa">Selasa</button>
-                    <button type="button" onclick="selectScheduleDay('Rabu')" class="day-filter-btn filter-pill-btn neo-btn bg-white text-neo-ink px-3 py-1.5 text-xs shrink-0" data-day="Rabu">Rabu</button>
-                    <button type="button" onclick="selectScheduleDay('Kamis')" class="day-filter-btn filter-pill-btn neo-btn bg-white text-neo-ink px-3 py-1.5 text-xs shrink-0" data-day="Kamis">Kamis</button>
-                    <button type="button" onclick="selectScheduleDay('Jumat')" class="day-filter-btn filter-pill-btn neo-btn bg-white text-neo-ink px-3 py-1.5 text-xs shrink-0" data-day="Jumat">Jumat</button>
-                    <button type="button" onclick="selectScheduleDay('Sabtu')" class="day-filter-btn filter-pill-btn neo-btn bg-white text-neo-ink px-3 py-1.5 text-xs shrink-0" data-day="Sabtu">Sabtu</button>
+                    <button type="button" onclick="selectScheduleDay('Senin')" class="day-filter-btn filter-pill-btn neo-btn surface-card px-3 py-1.5 text-xs shrink-0" data-day="Senin">Senin</button>
+                    <button type="button" onclick="selectScheduleDay('Selasa')" class="day-filter-btn filter-pill-btn neo-btn surface-card px-3 py-1.5 text-xs shrink-0" data-day="Selasa">Selasa</button>
+                    <button type="button" onclick="selectScheduleDay('Rabu')" class="day-filter-btn filter-pill-btn neo-btn surface-card px-3 py-1.5 text-xs shrink-0" data-day="Rabu">Rabu</button>
+                    <button type="button" onclick="selectScheduleDay('Kamis')" class="day-filter-btn filter-pill-btn neo-btn surface-card px-3 py-1.5 text-xs shrink-0" data-day="Kamis">Kamis</button>
+                    <button type="button" onclick="selectScheduleDay('Jumat')" class="day-filter-btn filter-pill-btn neo-btn surface-card px-3 py-1.5 text-xs shrink-0" data-day="Jumat">Jumat</button>
+                    <button type="button" onclick="selectScheduleDay('Sabtu')" class="day-filter-btn filter-pill-btn neo-btn surface-card px-3 py-1.5 text-xs shrink-0" data-day="Sabtu">Sabtu</button>
                 </div>
             </div>
 
             <div id="scheduleContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"></div>
 
-            <div class="neo-card bg-white p-5 space-y-4 reveal-on-scroll">
+            <div class="neo-card surface-card p-5 space-y-4 scroll-anim-card">
                 <div class="border-b-3 border-neo-ink pb-3 flex flex-wrap items-center justify-between gap-2">
                     <div>
                         <h3 class="font-display font-extrabold text-lg uppercase flex items-center gap-2">
@@ -927,8 +974,8 @@
         </section>
 
         <!-- ==================== VIEW 7: ALBUM KENANGAN KELAS ==================== -->
-        <section id="view-album" class="hidden space-y-5">
-            <div class="neo-card kpi-accent-card bg-neo-orange text-neo-ink p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 reveal-on-scroll">
+        <section id="view-album" class="hidden tab-view-anim-zoom space-y-5">
+            <div class="neo-card kpi-accent-card bg-neo-orange text-neo-ink p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 scroll-anim-card">
                 <div>
                     <span class="neo-badge bg-white text-neo-ink mb-1.5">
                         <i class="fa-solid fa-camera-retro"></i> DOKUMENTASI & GALERI
@@ -952,25 +999,27 @@
 
             <div class="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
                 <button type="button" onclick="filterAlbumCategory('ALL')" id="albumCat-ALL" class="filter-pill-btn active neo-btn bg-neo-yellow text-neo-ink px-3.5 py-1.5 text-xs shrink-0">Semua Foto</button>
-                <button type="button" onclick="filterAlbumCategory('Kegiatan Kelas')" id="albumCat-Kegiatan Kelas" class="filter-pill-btn neo-btn bg-white text-neo-ink px-3.5 py-1.5 text-xs shrink-0">🏫 Kegiatan Kelas</button>
-                <button type="button" onclick="filterAlbumCategory('Praktikum')" id="albumCat-Praktikum" class="filter-pill-btn neo-btn bg-white text-neo-ink px-3.5 py-1.5 text-xs shrink-0">🔬 Praktikum</button>
-                <button type="button" onclick="filterAlbumCategory('Classmeeting')" id="albumCat-Classmeeting" class="filter-pill-btn neo-btn bg-white text-neo-ink px-3.5 py-1.5 text-xs shrink-0">🏆 Classmeeting</button>
-                <button type="button" onclick="filterAlbumCategory('Acara Sekolah')" id="albumCat-Acara Sekolah" class="filter-pill-btn neo-btn bg-white text-neo-ink px-3.5 py-1.5 text-xs shrink-0">🎉 Acara Sekolah</button>
+                <button type="button" onclick="filterAlbumCategory('Kegiatan Kelas')" id="albumCat-Kegiatan Kelas" class="filter-pill-btn neo-btn surface-card px-3.5 py-1.5 text-xs shrink-0">🏫 Kegiatan Kelas</button>
+                <button type="button" onclick="filterAlbumCategory('Praktikum')" id="albumCat-Praktikum" class="filter-pill-btn neo-btn surface-card px-3.5 py-1.5 text-xs shrink-0">🔬 Praktikum</button>
+                <button type="button" onclick="filterAlbumCategory('Classmeeting')" id="albumCat-Classmeeting" class="filter-pill-btn neo-btn surface-card px-3.5 py-1.5 text-xs shrink-0">🏆 Classmeeting</button>
+                <button type="button" onclick="filterAlbumCategory('Acara Sekolah')" id="albumCat-Acara Sekolah" class="filter-pill-btn neo-btn surface-card px-3.5 py-1.5 text-xs shrink-0">🎉 Acara Sekolah</button>
             </div>
 
             <div id="albumGalleryGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5"></div>
         </section>
 
-        <!-- ==================== VIEW 8: STRUKTUR KELAS & DIREKTORI ANGGOTA (KLIK NAMA -> ID CARD) ==================== -->
-        <section id="view-siswa" class="hidden space-y-6">
-            <div class="neo-card bg-neo-surface p-5 sm:p-6 space-y-5 reveal-on-scroll">
+        <!-- ==================== VIEW 8: STRUKTUR KELAS & DIREKTORI ANGGOTA (MINIMALIST ID CARD) ==================== -->
+        <section id="view-siswa" class="hidden tab-view-anim-flip space-y-6">
+            <div class="neo-card bg-neo-surface p-5 sm:p-6 space-y-5 scroll-anim-card">
                 <div class="border-b-3 border-neo-ink pb-3 flex flex-wrap items-center justify-between gap-2">
                     <div>
                         <span class="neo-badge bg-neo-yellow text-neo-ink mb-1">BAGAN KEPENGURUSAN</span>
                         <h2 class="font-display font-extrabold text-xl sm:text-2xl uppercase">Struktur Organisasi Kelas</h2>
-                        <p class="text-xs font-semibold text-muted-adaptive mt-0.5">Klik kartu pengurus atau anggota untuk membuka Kartu Identitas (ID Card) Digital.</p>
+                        <p class="text-xs font-semibold text-muted-adaptive mt-0.5">
+                            Klik kartu pengurus atau anggota untuk membuka Kartu Identitas (Minimalist ID Card) Digital.
+                        </p>
                     </div>
-                    <span id="totalStudentsCountBadge" class="neo-badge bg-white text-neo-ink">0 Anggota</span>
+                    <span id="totalStudentsCountBadge" class="neo-badge surface-card text-main-adaptive">0 Anggota</span>
                 </div>
 
                 <!-- Wali Kelas Highlight di Sebelah Atas Struktur Kelas -->
@@ -985,11 +1034,13 @@
                 <div id="strukturOrganisasiGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
             </div>
 
-            <div class="neo-card bg-white p-5 sm:p-6 space-y-4 reveal-on-scroll">
+            <div class="neo-card surface-card p-5 sm:p-6 space-y-4 scroll-anim-card">
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b-3 border-neo-ink">
                     <div>
                         <h3 class="font-display font-extrabold text-lg sm:text-xl uppercase">Direktori Anggota Kelas</h3>
-                        <p class="text-xs font-semibold text-muted-adaptive">Klik nama anggota untuk melihat Foto Profil, Jabatan, dan Motto (Kartu Nama Digital).</p>
+                        <p class="text-xs font-semibold text-muted-adaptive">
+                            Klik nama anggota untuk melihat Foto Profil, Jabatan, dan Motto (ID Card Digital).
+                        </p>
                     </div>
                     <input
                         type="text"
@@ -1022,7 +1073,7 @@
             </div>
 
             <div class="flex items-center gap-2">
-                <button type="button" onclick="toggleDarkMode()" class="neo-btn bg-neo-surface text-neo-ink w-9 h-9 text-xs" title="Mode Gelap / Terang">
+                <button type="button" onclick="toggleDarkMode()" class="neo-btn bg-neo-surface text-main-adaptive w-9 h-9 text-xs" title="Mode Gelap / Terang">
                     <i class="fa-solid fa-circle-half-stroke"></i>
                 </button>
                 <button type="button" onclick="closeFullLoginScreen()" class="neo-btn bg-white text-neo-ink px-3.5 py-2 text-xs">
@@ -1032,7 +1083,7 @@
         </div>
 
         <div class="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-8 py-6 sm:py-10 flex items-center justify-center">
-            <div class="neo-card bg-white w-full grid grid-cols-1 lg:grid-cols-12 overflow-hidden shadow-neo-xl">
+            <div class="neo-card surface-card w-full grid grid-cols-1 lg:grid-cols-12 overflow-hidden shadow-neo-xl">
 
                 <!-- Kolom Kiri (7 Cols): Visual Showcase Latar Kelas Gelap & Identitas -->
                 <div class="lg:col-span-7 relative min-h-[260px] sm:min-h-[360px] lg:min-h-[520px] bg-neo-ink text-white p-6 sm:p-8 flex flex-col justify-between overflow-hidden border-b-4 lg:border-b-0 lg:border-r-4 border-neo-ink">
@@ -1091,7 +1142,7 @@
                 </div>
 
                 <!-- Kolom Kanan (5 Cols): Form Login Pengurus -->
-                <div class="lg:col-span-5 p-6 sm:p-8 lg:p-10 flex flex-col justify-center bg-white">
+                <div class="lg:col-span-5 p-6 sm:p-8 lg:p-10 flex flex-col justify-center surface-card">
                     <div class="space-y-2 mb-6">
                         <span class="neo-badge bg-neo-pink text-neo-ink">
                             <i class="fa-solid fa-user-shield"></i> OTENTIKASI AKUN
@@ -1147,7 +1198,7 @@
                                 <i class="fa-solid fa-right-to-bracket"></i> Masuk ke Workspace Pengurus
                             </button>
 
-                            <button type="button" onclick="closeFullLoginScreen()" class="neo-btn bg-neo-surface text-neo-ink w-full py-2.5 text-xs">
+                            <button type="button" onclick="closeFullLoginScreen()" class="neo-btn bg-neo-surface text-main-adaptive w-full py-2.5 text-xs">
                                 <i class="fa-solid fa-globe"></i> Batal & Lihat Web Publik
                             </button>
                         </div>
@@ -1207,7 +1258,7 @@
                     <button
                         type="button"
                         onclick="toggleDarkMode()"
-                        class="neo-btn bg-neo-surface text-neo-ink w-9 h-9 sm:w-10 sm:h-10 text-xs"
+                        class="neo-btn bg-neo-surface text-main-adaptive w-9 h-9 sm:w-10 sm:h-10 text-xs"
                         title="Ganti Tema Gelap / Terang"
                     >
                         <i class="fa-solid fa-circle-half-stroke"></i>
@@ -1259,50 +1310,50 @@
                 </div>
 
                 <nav id="adminDrawerNavList" class="space-y-2">
-                    <button type="button" onclick="selectAdminTabFromDrawer('adm-beranda')" id="admdrawer-adm-beranda" data-perm="beranda" class="admin-nav-btn active neo-btn bg-white text-neo-ink w-full justify-start px-3.5 py-2.5 text-xs sm:text-sm">
-                        <span class="w-6 text-center"><i class="fa-solid fa-gauge-high text-neo-ink"></i></span>
+                    <button type="button" onclick="selectAdminTabFromDrawer('adm-beranda')" id="admdrawer-adm-beranda" data-perm="beranda" class="admin-nav-btn active neo-btn surface-card w-full justify-start px-3.5 py-2.5 text-xs sm:text-sm">
+                        <span class="w-6 text-center"><i class="fa-solid fa-gauge-high text-amber-500"></i></span>
                         <span class="flex-1 text-left">Beranda Panel Admin</span>
                     </button>
 
-                    <button type="button" onclick="selectAdminTabFromDrawer('adm-keuangan')" id="admdrawer-adm-keuangan" data-perm="keuangan" class="admin-nav-btn neo-btn bg-white text-neo-ink w-full justify-start px-3.5 py-2.5 text-xs sm:text-sm">
-                        <span class="w-6 text-center"><i class="fa-solid fa-coins text-amber-500"></i></span>
+                    <button type="button" onclick="selectAdminTabFromDrawer('adm-keuangan')" id="admdrawer-adm-keuangan" data-perm="keuangan" class="admin-nav-btn neo-btn surface-card w-full justify-start px-3.5 py-2.5 text-xs sm:text-sm">
+                        <span class="w-6 text-center"><i class="fa-solid fa-coins text-emerald-500"></i></span>
                         <span class="flex-1 text-left">1. Kas, Senin & Sheet</span>
                     </button>
 
-                    <button type="button" onclick="selectAdminTabFromDrawer('adm-absensi')" id="admdrawer-adm-absensi" data-perm="absensi" class="admin-nav-btn neo-btn bg-white text-neo-ink w-full justify-start px-3.5 py-2.5 text-xs sm:text-sm">
-                        <span class="w-6 text-center"><i class="fa-solid fa-clipboard-user text-emerald-500"></i></span>
+                    <button type="button" onclick="selectAdminTabFromDrawer('adm-absensi')" id="admdrawer-adm-absensi" data-perm="absensi" class="admin-nav-btn neo-btn surface-card w-full justify-start px-3.5 py-2.5 text-xs sm:text-sm">
+                        <span class="w-6 text-center"><i class="fa-solid fa-clipboard-user text-lime-500"></i></span>
                         <span class="flex-1 text-left">2. Absensi Digital</span>
                         <span class="bg-neo-lime text-neo-ink border border-neo-ink rounded px-1.5 text-[9px] font-mono">H/M/B</span>
                     </button>
 
-                    <button type="button" onclick="selectAdminTabFromDrawer('adm-siswa')" id="admdrawer-adm-siswa" data-perm="siswa" class="admin-nav-btn neo-btn bg-white text-neo-ink w-full justify-start px-3.5 py-2.5 text-xs sm:text-sm">
+                    <button type="button" onclick="selectAdminTabFromDrawer('adm-siswa')" id="admdrawer-adm-siswa" data-perm="siswa" class="admin-nav-btn neo-btn surface-card w-full justify-start px-3.5 py-2.5 text-xs sm:text-sm">
                         <span class="w-6 text-center"><i class="fa-solid fa-user-graduate text-sky-500"></i></span>
                         <span class="flex-1 text-left">3. Master Data Anggota</span>
                     </button>
 
-                    <button type="button" onclick="selectAdminTabFromDrawer('adm-info')" id="admdrawer-adm-info" data-perm="info" class="admin-nav-btn neo-btn bg-white text-neo-ink w-full justify-start px-3.5 py-2.5 text-xs sm:text-sm">
+                    <button type="button" onclick="selectAdminTabFromDrawer('adm-info')" id="admdrawer-adm-info" data-perm="info" class="admin-nav-btn neo-btn surface-card w-full justify-start px-3.5 py-2.5 text-xs sm:text-sm">
                         <span class="w-6 text-center"><i class="fa-solid fa-bullhorn text-rose-500"></i></span>
-                        <span class="flex-1 text-left">4. Tugas, Foto & Mading</span>
+                        <span class="flex-1 text-left">4. Tugas, NGL & Mading</span>
                     </button>
 
-                    <button type="button" onclick="selectAdminTabFromDrawer('adm-jadwal')" id="admdrawer-adm-jadwal" data-perm="jadwal" class="admin-nav-btn neo-btn bg-white text-neo-ink w-full justify-start px-3.5 py-2.5 text-xs sm:text-sm">
+                    <button type="button" onclick="selectAdminTabFromDrawer('adm-jadwal')" id="admdrawer-adm-jadwal" data-perm="jadwal" class="admin-nav-btn neo-btn surface-card w-full justify-start px-3.5 py-2.5 text-xs sm:text-sm">
                         <span class="w-6 text-center"><i class="fa-solid fa-calendar-days text-purple-500"></i></span>
                         <span class="flex-1 text-left">5. Jadwal & Pilih Jam</span>
                     </button>
 
-                    <button type="button" onclick="selectAdminTabFromDrawer('adm-album')" id="admdrawer-adm-album" data-perm="album" class="admin-nav-btn neo-btn bg-white text-neo-ink w-full justify-start px-3.5 py-2.5 text-xs sm:text-sm">
+                    <button type="button" onclick="selectAdminTabFromDrawer('adm-album')" id="admdrawer-adm-album" data-perm="album" class="admin-nav-btn neo-btn surface-card w-full justify-start px-3.5 py-2.5 text-xs sm:text-sm">
                         <span class="w-6 text-center"><i class="fa-solid fa-camera text-orange-500"></i></span>
                         <span class="flex-1 text-left">6. Galeri Album</span>
                     </button>
 
-                    <button type="button" onclick="selectAdminTabFromDrawer('adm-akun')" id="admdrawer-adm-akun" data-perm="akun" class="admin-nav-btn neo-btn bg-white text-neo-ink w-full justify-start px-3.5 py-2.5 text-xs sm:text-sm">
+                    <button type="button" onclick="selectAdminTabFromDrawer('adm-akun')" id="admdrawer-adm-akun" data-perm="akun" class="admin-nav-btn neo-btn surface-card w-full justify-start px-3.5 py-2.5 text-xs sm:text-sm">
                         <span class="w-6 text-center"><i class="fa-solid fa-users-gear text-pink-500"></i></span>
                         <span class="flex-1 text-left">7. Akun & Hak Akses</span>
                     </button>
 
-                    <button type="button" onclick="selectAdminTabFromDrawer('adm-pengaturan')" id="admdrawer-adm-pengaturan" data-perm="pengaturan" class="admin-nav-btn neo-btn bg-white text-neo-ink w-full justify-start px-3.5 py-2.5 text-xs sm:text-sm">
+                    <button type="button" onclick="selectAdminTabFromDrawer('adm-pengaturan')" id="admdrawer-adm-pengaturan" data-perm="pengaturan" class="admin-nav-btn neo-btn surface-card w-full justify-start px-3.5 py-2.5 text-xs sm:text-sm">
                         <span class="w-6 text-center"><i class="fa-solid fa-sliders text-indigo-500"></i></span>
-                        <span class="flex-1 text-left">8. Identitas, Libur & Semester</span>
+                        <span class="flex-1 text-left">8. Identitas, Slide & Libur</span>
                     </button>
                 </nav>
             </div>
@@ -1322,35 +1373,35 @@
         <!-- Kontainer Isi Panel Admin -->
         <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 pt-5 space-y-6">
 
-            <!-- Ringkasan Statistik Real-Time Admin (Tampil di Atas) -->
+            <!-- Ringkasan Statistik Real-Time Admin -->
             <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-                <div class="neo-card bg-white p-3.5">
+                <div class="neo-card surface-card p-3.5">
                     <span class="font-mono text-[10px] font-extrabold text-muted-adaptive uppercase block">Saldo Kas Aktif</span>
                     <strong id="admStatBalance" class="font-mono font-extrabold text-sm sm:text-base text-emerald-500 truncate block mt-0.5">Rp 0</strong>
                 </div>
-                <div class="neo-card bg-white p-3.5">
+                <div class="neo-card surface-card p-3.5">
                     <span class="font-mono text-[10px] font-extrabold text-muted-adaptive uppercase block">Total Anggota</span>
                     <strong id="admStatStudents" class="font-mono font-extrabold text-sm sm:text-base block mt-0.5">0 Siswa</strong>
                 </div>
-                <div class="neo-card bg-white p-3.5">
+                <div class="neo-card surface-card p-3.5">
                     <span class="font-mono text-[10px] font-extrabold text-muted-adaptive uppercase block">Kepatuhan Kas</span>
                     <strong id="admStatCompliance" class="font-mono font-extrabold text-sm sm:text-base text-sky-500 block mt-0.5">0%</strong>
                 </div>
-                <div class="neo-card bg-white p-3.5">
+                <div class="neo-card surface-card p-3.5">
                     <span class="font-mono text-[10px] font-extrabold text-muted-adaptive uppercase block">Periode Senin</span>
                     <strong id="admStatMondays" class="font-mono font-extrabold text-sm sm:text-base text-purple-500 block mt-0.5">0 Pekan</strong>
                 </div>
-                <div class="neo-card bg-white p-3.5">
+                <div class="neo-card surface-card p-3.5">
                     <span class="font-mono text-[10px] font-extrabold text-muted-adaptive uppercase block">Info & Tugas</span>
                     <strong id="admStatInfo" class="font-mono font-extrabold text-sm sm:text-base text-amber-500 block mt-0.5">0 Aktif</strong>
                 </div>
-                <div class="neo-card bg-white p-3.5">
-                    <span class="font-mono text-[10px] font-extrabold text-muted-adaptive uppercase block">Hari Libur</span>
-                    <strong id="admStatSticky" class="font-mono font-extrabold text-sm sm:text-base text-pink-500 block mt-0.5">0 Libur</strong>
+                <div class="neo-card surface-card p-3.5">
+                    <span class="font-mono text-[10px] font-extrabold text-muted-adaptive uppercase block">Mading & NGL</span>
+                    <strong id="admStatSticky" class="font-mono font-extrabold text-sm sm:text-base text-pink-500 block mt-0.5">0 Pesan</strong>
                 </div>
             </div>
 
-            <!-- ==================== ADMIN TAB 0: BERANDA PANEL ADMIN (RINGKASAN EKSEKUTIF & PINTASAN) ==================== -->
+            <!-- ==================== ADMIN TAB 0: BERANDA PANEL ADMIN ==================== -->
             <section id="adm-beranda" class="admin-section space-y-6">
                 <div class="neo-card kpi-accent-card bg-neo-yellow text-neo-ink p-5 sm:p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                     <div class="space-y-1.5">
@@ -1362,7 +1413,7 @@
                             Selamat Bertugas di Workspace Pengurus!
                         </h3>
                         <p id="admHomePermissionDesc" class="text-xs sm:text-sm font-semibold opacity-90">
-                            Seluruh perubahan yang Anda simpan pada panel ini langsung terupdate secara real-time ke semua HP/perangkat anggota kelas.
+                            Setiap perubahan yang Anda simpan langsung tersinkronisasi secara real-time ke seluruh perangkat anggota kelas.
                         </p>
                     </div>
                     <div class="flex flex-wrap items-center gap-2 shrink-0">
@@ -1381,33 +1432,27 @@
                         <h4 class="font-display font-extrabold text-sm sm:text-base uppercase">Pintasan Cepat Modul Pengelolaan</h4>
                         <span class="font-mono text-[11px] font-bold text-muted-adaptive">Klik kartu untuk membuka modul</span>
                     </div>
-                    <div id="admHomeQuickModulesGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                        <!-- Diisi dinamis oleh kelas.js sesuai hak akses akun yang sedang login -->
-                    </div>
+                    <div id="admHomeQuickModulesGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"></div>
                 </div>
 
                 <!-- Ringkasan Status Operasional Kelas Hari Ini -->
                 <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
-                    <div class="lg:col-span-6 neo-card bg-white p-5 space-y-3">
+                    <div class="lg:col-span-6 neo-card surface-card p-5 space-y-3">
                         <div class="flex items-center justify-between border-b-2 border-neo-ink pb-2.5">
                             <span class="neo-badge bg-neo-lime text-neo-ink"><i class="fa-solid fa-clipboard-check"></i> RINGKASAN ABSENSI HARI INI</span>
                             <button type="button" onclick="switchAdminTab('adm-absensi')" class="text-xs font-extrabold underline">Kelola Absen →</button>
                         </div>
-                        <div id="admHomeTodayAttendanceBox" class="grid grid-cols-4 gap-2 text-center pt-1">
-                            <!-- Diisi via kelas.js -->
-                        </div>
+                        <div id="admHomeTodayAttendanceBox" class="grid grid-cols-4 gap-2 text-center pt-1"></div>
                     </div>
 
-                    <div class="lg:col-span-6 neo-card bg-white p-5 space-y-3">
+                    <div class="lg:col-span-6 neo-card surface-card p-5 space-y-3">
                         <div class="flex items-center justify-between border-b-2 border-neo-ink pb-2.5">
-                            <span class="neo-badge bg-neo-pink text-neo-ink"><i class="fa-solid fa-clock-rotate-left"></i> STATUS FOTO TUGAS & HARI LIBUR</span>
-                            <button type="button" onclick="cleanExpiredTaskPhotos(true)" class="neo-btn bg-neo-surface text-neo-ink px-2.5 py-1 text-[11px]">
-                                <i class="fa-solid fa-broom"></i> Cek & Bersihkan Foto Lewat Deadline
+                            <span class="neo-badge bg-neo-pink text-neo-ink"><i class="fa-solid fa-clock-rotate-left"></i> PEMBERSIH OTOMATIS FOTO & NGL</span>
+                            <button type="button" onclick="cleanExpiredTaskPhotos(true)" class="neo-btn bg-neo-surface text-main-adaptive px-2.5 py-1 text-[11px]">
+                                <i class="fa-solid fa-broom"></i> Bersihkan Sekarang
                             </button>
                         </div>
-                        <div id="admHomeStorageAndHolidayBox" class="text-xs font-semibold space-y-2 pt-1">
-                            <!-- Diisi via kelas.js -->
-                        </div>
+                        <div id="admHomeStorageAndHolidayBox" class="text-xs font-semibold space-y-2 pt-1"></div>
                     </div>
                 </div>
             </section>
@@ -1416,12 +1461,12 @@
             <section id="adm-keuangan" class="admin-section hidden space-y-6">
                 <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
                     <!-- Kotak Rentang Tanggal Senin (Dikunci untuk Bendahara Biasa, Hanya Bisa Diubah oleh Admin Utama / Izin Khusus) -->
-                    <div class="lg:col-span-7 neo-card bg-white p-5 space-y-3 relative">
+                    <div class="lg:col-span-7 neo-card surface-card p-5 space-y-3 relative">
                         <div class="flex flex-wrap items-center justify-between gap-2">
                             <span class="neo-badge bg-neo-yellow text-neo-ink"><i class="fa-solid fa-calendar-week"></i> RENTANG TANGGAL SENIN & TARIF KAS</span>
                             <div class="flex items-center gap-1.5">
                                 <span id="admMondayLockStatusBadge" class="neo-badge bg-neo-mint text-neo-ink text-[10px]">TERBUKA (SUPER ADMIN)</span>
-                                <span id="admTotalMondaysBadge" class="neo-badge bg-neo-surface text-neo-ink text-[10px]">0 Kolom Senin</span>
+                                <span id="admTotalMondaysBadge" class="neo-badge bg-neo-surface text-main-adaptive text-[10px]">0 Kolom Senin</span>
                             </div>
                         </div>
                         <h3 class="font-display font-extrabold text-base uppercase">Atur Periode Tanggal Awal & Akhir Kas</h3>
@@ -1452,17 +1497,17 @@
                             <span class="neo-badge bg-neo-ink text-white mb-1"><i class="fa-solid fa-file-arrow-down"></i> EKSPOR FILE SHEET ESTETIK</span>
                             <h3 class="font-display font-extrabold text-base uppercase">Unduh Laporan Sheet (Kop 2 Logo)</h3>
                             <p class="text-xs font-semibold text-muted-adaptive mt-0.5">
-                                Dilengkapi **Logo Sekolah (Kiri)** & **Logo Kelas (Kanan)** pada Kop Atas, Identitas Wali Kelas, Ringkasan Saldo, Tabel Pelunasan, dan Buku Mutasi Kas.
+                                Dilengkapi Logo Sekolah (Kiri) & Logo Kelas (Kanan) pada Kop Atas, Ringkasan Saldo, Tabel Pelunasan, dan Buku Mutasi Kas.
                             </p>
                         </div>
                         <div class="grid grid-cols-2 gap-2">
                             <button type="button" onclick="downloadOfficialExcelSheet('ALL')" class="neo-btn bg-neo-yellow text-neo-ink py-2.5 px-3 text-xs col-span-2">
                                 <i class="fa-solid fa-file-excel"></i> Unduh Sheet Lengkap + Kop 2 Logo (.xls)
                             </button>
-                            <button type="button" onclick="exportIuranCSV()" class="neo-btn bg-white text-neo-ink py-2 px-2.5 text-xs">
+                            <button type="button" onclick="exportIuranCSV()" class="neo-btn surface-card py-2 px-2.5 text-xs">
                                 <i class="fa-solid fa-file-csv"></i> CSV Rekap Iuran
                             </button>
-                            <button type="button" onclick="exportMutasiCSV()" class="neo-btn bg-white text-neo-ink py-2 px-2.5 text-xs">
+                            <button type="button" onclick="exportMutasiCSV()" class="neo-btn surface-card py-2 px-2.5 text-xs">
                                 <i class="fa-solid fa-file-csv"></i> CSV Mutasi Kas
                             </button>
                         </div>
@@ -1471,7 +1516,7 @@
 
                 <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
                     <!-- Form Input & Edit Mutasi Kas (4 Cols) -->
-                    <div class="lg:col-span-4 neo-card bg-white p-5 space-y-4 h-fit">
+                    <div class="lg:col-span-4 neo-card surface-card p-5 space-y-4 h-fit">
                         <div class="border-b-3 border-neo-ink pb-2.5 flex items-center justify-between">
                             <h3 id="admTxFormTitle" class="font-display font-extrabold text-base uppercase">Catat Transaksi Kas</h3>
                             <button type="button" onclick="resetTransactionForm()" id="btnCancelEditTx" class="hidden text-xs font-bold text-rose-500 underline">Batal Edit</button>
@@ -1523,11 +1568,11 @@
 
                     <!-- Matriks Kontrol Iuran & Daftar Transaksi (8 Cols) -->
                     <div class="lg:col-span-8 space-y-6">
-                        <div class="neo-card bg-white p-5 space-y-4">
+                        <div class="neo-card surface-card p-5 space-y-4">
                             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b-3 border-neo-ink">
                                 <div>
                                     <h3 class="font-display font-extrabold text-base uppercase">Kontrol Pelunasan Kas Siswa (Real-Time Firebase)</h3>
-                                    <p class="text-xs font-semibold text-muted-adaptive">Klik tombol pada kolom tanggal Senin yang telah ditetapkan untuk mengubah status LUNAS / BELUM.</p>
+                                    <p class="text-xs font-semibold text-muted-adaptive">Klik tombol pada kolom tanggal Senin untuk mengubah status LUNAS / BELUM.</p>
                                 </div>
                                 <input
                                     type="text"
@@ -1547,7 +1592,7 @@
                         </div>
 
                         <!-- Daftar Mutasi Kas -->
-                        <div class="neo-card bg-white p-5 space-y-4">
+                        <div class="neo-card surface-card p-5 space-y-4">
                             <div class="flex items-center justify-between pb-3 border-b-3 border-neo-ink">
                                 <h3 class="font-display font-extrabold text-base uppercase">Riwayat Transaksi Buku Kas</h3>
                                 <span id="admTxCountBadge" class="neo-badge bg-neo-yellow text-neo-ink">0 Transaksi</span>
@@ -1577,7 +1622,7 @@
                         <span class="neo-badge bg-white text-neo-ink mb-1"><i class="fa-solid fa-user-check"></i> MODUL PRESENSI DIGITAL KELAS</span>
                         <h3 class="font-display font-extrabold text-lg sm:text-xl uppercase">Kelola Absensi Harian, Mingguan & Bulanan</h3>
                         <p class="text-xs font-semibold opacity-90">
-                            Pilih status kehadiran (H/I/S/A) atau tekan tombol **✕ (Hapus Pilihan)** untuk mengosongkan pilihan.
+                            Pilih status kehadiran (H/I/S/A) atau tekan tombol ✕ (Hapus Pilihan) untuk mengosongkan pilihan.
                         </p>
                     </div>
 
@@ -1601,7 +1646,7 @@
                 </div>
 
                 <!-- Bar Filter Periode & Aksi Cepat Admin -->
-                <div class="neo-card bg-white p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div class="neo-card surface-card p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
                     <div class="flex flex-wrap items-center gap-2.5">
                         <div id="admAttDailyWrap" class="flex items-center gap-2">
                             <label class="font-display font-extrabold text-xs uppercase">Tanggal Absen:</label>
@@ -1655,25 +1700,25 @@
 
                 <!-- 4 Kartu Ringkasan Absensi di Admin -->
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <div class="neo-card bg-white p-3.5 border-l-8 border-l-lime-400">
+                    <div class="neo-card surface-card p-3.5 border-l-8 border-l-lime-400">
                         <span class="font-mono text-[10px] font-extrabold text-muted-adaptive uppercase">Total Hadir (H)</span>
                         <div id="admAttCountH" class="font-mono font-extrabold text-xl text-emerald-500 mt-0.5">0</div>
                     </div>
-                    <div class="neo-card bg-white p-3.5 border-l-8 border-l-sky-400">
+                    <div class="neo-card surface-card p-3.5 border-l-8 border-l-sky-400">
                         <span class="font-mono text-[10px] font-extrabold text-muted-adaptive uppercase">Total Izin (I)</span>
                         <div id="admAttCountI" class="font-mono font-extrabold text-xl text-sky-500 mt-0.5">0</div>
                     </div>
-                    <div class="neo-card bg-white p-3.5 border-l-8 border-l-yellow-400">
+                    <div class="neo-card surface-card p-3.5 border-l-8 border-l-yellow-400">
                         <span class="font-mono text-[10px] font-extrabold text-muted-adaptive uppercase">Total Sakit (S)</span>
                         <div id="admAttCountS" class="font-mono font-extrabold text-xl text-amber-500 mt-0.5">0</div>
                     </div>
-                    <div class="neo-card bg-white p-3.5 border-l-8 border-l-rose-500">
+                    <div class="neo-card surface-card p-3.5 border-l-8 border-l-rose-500">
                         <span class="font-mono text-[10px] font-extrabold text-muted-adaptive uppercase">Total Alfa (A)</span>
                         <div id="admAttCountA" class="font-mono font-extrabold text-xl text-rose-500 mt-0.5">0</div>
                     </div>
                 </div>
 
-                <div class="neo-card bg-white p-4 sm:p-6 space-y-4">
+                <div class="neo-card surface-card p-4 sm:p-6 space-y-4">
                     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b-3 border-neo-ink">
                         <div>
                             <h4 id="admAttendanceTableTitle" class="font-display font-extrabold text-base uppercase">Lembar Presensi Anggota Kelas</h4>
@@ -1696,7 +1741,7 @@
             <!-- ==================== ADMIN TAB 3: MASTER DATA ANGGOTA KELAS ==================== -->
             <section id="adm-siswa" class="admin-section hidden space-y-6">
                 <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                    <div class="lg:col-span-5 neo-card bg-white p-5 space-y-4 h-fit">
+                    <div class="lg:col-span-5 neo-card surface-card p-5 space-y-4 h-fit">
                         <div class="border-b-3 border-neo-ink pb-2.5 flex items-center justify-between">
                             <h3 id="admStudentFormTitle" class="font-display font-extrabold text-base uppercase">Form Master Anggota & Perangkat</h3>
                             <button type="button" onclick="resetStudentForm()" id="btnCancelEditStudent" class="hidden text-xs font-bold text-rose-500 underline">Batal Edit</button>
@@ -1781,7 +1826,7 @@
                         </form>
                     </div>
 
-                    <div class="lg:col-span-7 neo-card bg-white p-5 space-y-4">
+                    <div class="lg:col-span-7 neo-card surface-card p-5 space-y-4">
                         <div class="flex items-center justify-between pb-3 border-b-3 border-neo-ink">
                             <div>
                                 <h3 class="font-display font-extrabold text-base uppercase">Daftar Master Anggota Kelas Terdaftar</h3>
@@ -1808,10 +1853,10 @@
                 </div>
             </section>
 
-            <!-- ==================== ADMIN TAB 4: KELOLA INFO, TUGAS BERFOTO & AUTO-EXPIRE DEADLINE ==================== -->
+            <!-- ==================== ADMIN TAB 4: KELOLA INFO, TUGAS BERFOTO, MADING & NGL ==================== -->
             <section id="adm-info" class="admin-section hidden space-y-6">
                 <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                    <div class="lg:col-span-5 neo-card bg-white p-5 space-y-4 h-fit">
+                    <div class="lg:col-span-5 neo-card surface-card p-5 space-y-4 h-fit">
                         <div class="border-b-3 border-neo-ink pb-2.5 flex items-center justify-between">
                             <h3 id="admInfoFormTitle" class="font-display font-extrabold text-base uppercase">Buat Pengumuman / Tugas + Foto</h3>
                             <button type="button" onclick="resetInfoForm()" id="btnCancelEditInfo" class="hidden text-xs font-bold text-rose-500 underline">Batal Edit</button>
@@ -1834,7 +1879,7 @@
                                 </div>
                             </div>
 
-                            <!-- FITUR BARU: Waktu Deadline Otomatis Hapus Foto -->
+                            <!-- Waktu Deadline Otomatis Hapus Foto -->
                             <div class="bg-neo-surface border-2 border-neo-ink rounded-xl p-3 space-y-2">
                                 <div class="flex items-center justify-between">
                                     <label class="font-display font-extrabold text-[11px] uppercase flex items-center gap-1.5">
@@ -1848,11 +1893,11 @@
                                     class="neo-input w-full px-2.5 py-1.5 text-xs font-mono"
                                 >
                                 <p class="text-[10px] font-semibold text-muted-adaptive leading-tight">
-                                    Jika diisi, lampiran foto di bawah akan **otomatis dihapus** saat melewati waktu ini, sedangkan teks pengumuman tetap tersimpan.
+                                    Jika diisi, lampiran foto di bawah akan otomatis dihapus saat melewati waktu ini, sedangkan teks pengumuman tetap tersimpan.
                                 </p>
                             </div>
 
-                            <!-- FITUR BARU: Lampiran Foto Tugas / Pengumuman -->
+                            <!-- Lampiran Foto Tugas / Pengumuman -->
                             <div class="bg-neo-surface border-2 border-neo-ink rounded-xl p-3 space-y-2">
                                 <div class="flex items-center justify-between">
                                     <label class="block font-display font-extrabold text-[11px] uppercase">Lampiran Foto Tugas / Materi (Opsional)</label>
@@ -1880,24 +1925,24 @@
                     </div>
 
                     <div class="lg:col-span-7 space-y-6">
-                        <div class="neo-card bg-white p-5 space-y-4">
+                        <div class="neo-card surface-card p-5 space-y-4">
                             <div class="flex flex-wrap items-center justify-between gap-2 border-b-3 border-neo-ink pb-2.5">
                                 <h3 class="font-display font-extrabold text-base uppercase">Daftar Pengumuman & Tugas Aktif</h3>
-                                <button type="button" onclick="cleanExpiredTaskPhotos(true)" class="neo-btn bg-neo-surface text-neo-ink px-2.5 py-1 text-[11px]">
+                                <button type="button" onclick="cleanExpiredTaskPhotos(true)" class="neo-btn bg-neo-surface text-main-adaptive px-2.5 py-1 text-[11px]">
                                     <i class="fa-solid fa-broom"></i> Bersihkan Foto Lewat Deadline
                                 </button>
                             </div>
                             <div id="admInfoListContainer" class="space-y-3"></div>
                         </div>
 
-                        <!-- Moderasi Papan Tempel Pengunjung -->
-                        <div class="neo-card bg-white p-5 space-y-4">
+                        <!-- Moderasi Papan Tempel & Pesan NGL 24 Jam -->
+                        <div class="neo-card surface-card p-5 space-y-4">
                             <div class="flex items-center justify-between border-b-3 border-neo-ink pb-2.5">
                                 <div>
-                                    <h3 class="font-display font-extrabold text-base uppercase">Moderasi Kertas Papan Tempel</h3>
-                                    <p class="text-xs font-semibold text-muted-adaptive">Hapus pesan tempelan yang sudah usang atau kurang sesuai.</p>
+                                    <h3 class="font-display font-extrabold text-base uppercase">Moderasi Papan Tempel & Pesan NGL Anonim</h3>
+                                    <p class="text-xs font-semibold text-muted-adaptive">Bagikan pesan NGL ke Story IG atau hapus pesan tempelan yang kurang sesuai.</p>
                                 </div>
-                                <span id="admStickyCountBadge" class="neo-badge bg-neo-pink text-neo-ink">0 Kertas</span>
+                                <span id="admStickyCountBadge" class="neo-badge bg-neo-pink text-neo-ink">0 Pesan</span>
                             </div>
                             <div id="admStickyListContainer" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
                         </div>
@@ -1908,7 +1953,7 @@
             <!-- ==================== ADMIN TAB 5: KELOLA JADWAL PELAJARAN (DENGAN PEMILIH JAM) ==================== -->
             <section id="adm-jadwal" class="admin-section hidden space-y-6">
                 <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                    <div class="lg:col-span-5 neo-card bg-white p-5 space-y-4 h-fit">
+                    <div class="lg:col-span-5 neo-card surface-card p-5 space-y-4 h-fit">
                         <div class="border-b-3 border-neo-ink pb-2.5 flex items-center justify-between">
                             <h3 id="admScheduleFormTitle" class="font-display font-extrabold text-base uppercase">Atur Jadwal Mata Pelajaran</h3>
                             <button type="button" onclick="resetScheduleForm()" id="btnCancelEditSchedule" class="hidden text-xs font-bold text-rose-500 underline">Batal Edit</button>
@@ -1968,11 +2013,11 @@
                                 <div>
                                     <span class="block font-mono text-[10px] font-bold text-muted-adaptive mb-1">Preset Jam Cepat:</span>
                                     <div class="flex flex-wrap gap-1.5">
-                                        <button type="button" onclick="applySchedulePreset('07:15', '08:45')" class="neo-btn bg-white text-neo-ink px-2 py-1 text-[10px] font-mono">07:15 - 08:45</button>
-                                        <button type="button" onclick="applySchedulePreset('08:45', '10:15')" class="neo-btn bg-white text-neo-ink px-2 py-1 text-[10px] font-mono">08:45 - 10:15</button>
-                                        <button type="button" onclick="applySchedulePreset('10:30', '12:00')" class="neo-btn bg-white text-neo-ink px-2 py-1 text-[10px] font-mono">10:30 - 12:00</button>
-                                        <button type="button" onclick="applySchedulePreset('12:30', '14:00')" class="neo-btn bg-white text-neo-ink px-2 py-1 text-[10px] font-mono">12:30 - 14:00</button>
-                                        <button type="button" onclick="applySchedulePreset('14:00', '15:30')" class="neo-btn bg-white text-neo-ink px-2 py-1 text-[10px] font-mono">14:00 - 15:30</button>
+                                        <button type="button" onclick="applySchedulePreset('07:15', '08:45')" class="neo-btn surface-card px-2 py-1 text-[10px] font-mono">07:15 - 08:45</button>
+                                        <button type="button" onclick="applySchedulePreset('08:45', '10:15')" class="neo-btn surface-card px-2 py-1 text-[10px] font-mono">08:45 - 10:15</button>
+                                        <button type="button" onclick="applySchedulePreset('10:30', '12:00')" class="neo-btn surface-card px-2 py-1 text-[10px] font-mono">10:30 - 12:00</button>
+                                        <button type="button" onclick="applySchedulePreset('12:30', '14:00')" class="neo-btn surface-card px-2 py-1 text-[10px] font-mono">12:30 - 14:00</button>
+                                        <button type="button" onclick="applySchedulePreset('14:00', '15:30')" class="neo-btn surface-card px-2 py-1 text-[10px] font-mono">14:00 - 15:30</button>
                                     </div>
                                 </div>
 
@@ -2001,7 +2046,7 @@
                         </form>
                     </div>
 
-                    <div class="lg:col-span-7 neo-card bg-white p-5 space-y-4">
+                    <div class="lg:col-span-7 neo-card surface-card p-5 space-y-4">
                         <h3 class="font-display font-extrabold text-base uppercase border-b-3 border-neo-ink pb-2.5">Susunan Jadwal Pelajaran per Hari</h3>
                         <div id="admScheduleListContainer" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
                     </div>
@@ -2011,7 +2056,7 @@
             <!-- ==================== ADMIN TAB 6: KELOLA ALBUM KELAS ==================== -->
             <section id="adm-album" class="admin-section hidden space-y-6">
                 <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                    <div class="lg:col-span-4 neo-card bg-white p-5 space-y-4 h-fit">
+                    <div class="lg:col-span-4 neo-card surface-card p-5 space-y-4 h-fit">
                         <div class="border-b-3 border-neo-ink pb-2.5 flex items-center justify-between">
                             <h3 id="admAlbumFormTitle" class="font-display font-extrabold text-base uppercase">Unggah Dokumentasi Album</h3>
                             <button type="button" onclick="resetAlbumForm()" id="btnCancelEditAlbum" class="hidden text-xs font-bold text-rose-500 underline">Batal Edit</button>
@@ -2060,7 +2105,7 @@
                         </form>
                     </div>
 
-                    <div class="lg:col-span-8 neo-card bg-white p-5 space-y-4">
+                    <div class="lg:col-span-8 neo-card surface-card p-5 space-y-4">
                         <div class="flex items-center justify-between pb-3 border-b-3 border-neo-ink">
                             <h3 class="font-display font-extrabold text-base uppercase">Koleksi Foto Album Kelas</h3>
                             <span id="admAlbumCountBadge" class="neo-badge bg-neo-orange text-neo-ink">0 Foto</span>
@@ -2073,7 +2118,7 @@
             <!-- ==================== ADMIN TAB 7: KELOLA AKUN ADMIN & HAK AKSES BERTINGKAT (STRICT RBAC) ==================== -->
             <section id="adm-akun" class="admin-section hidden space-y-6">
                 <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                    <div class="lg:col-span-5 neo-card bg-white p-5 space-y-4 h-fit">
+                    <div class="lg:col-span-5 neo-card surface-card p-5 space-y-4 h-fit">
                         <div class="border-b-3 border-neo-ink pb-2.5 flex items-center justify-between">
                             <h3 id="admAccFormTitle" class="font-display font-extrabold text-base uppercase">Buat / Atur Hak Akses Akun Pengurus</h3>
                             <button type="button" onclick="resetAdminAccountForm()" id="btnCancelEditAcc" class="hidden text-xs font-bold text-rose-500 underline">Batal Edit</button>
@@ -2140,7 +2185,7 @@
                                         </label>
                                         <label class="flex items-center gap-2 cursor-pointer">
                                             <input type="checkbox" name="admPerm" value="info" class="w-4 h-4 accent-neo-ink">
-                                            <span>Buat Tugas & Mading</span>
+                                            <span>Buat Tugas, NGL & Mading</span>
                                         </label>
                                         <label class="flex items-center gap-2 cursor-pointer">
                                             <input type="checkbox" name="admPerm" value="jadwal" class="w-4 h-4 accent-neo-ink">
@@ -2164,7 +2209,7 @@
                                         </label>
                                         <label class="flex items-center gap-2 cursor-pointer">
                                             <input type="checkbox" name="admPerm" value="pengaturan" class="w-4 h-4 accent-neo-ink">
-                                            <span>Ubah Identitas Web, Kalender Libur & Semester</span>
+                                            <span>Ubah Identitas Web, Slide, Kalender & Semester</span>
                                         </label>
                                         <label class="flex items-center gap-2 cursor-pointer text-rose-600 pt-1 border-t border-neo-ink/20">
                                             <input type="checkbox" name="admPerm" value="akun" class="w-4 h-4 accent-neo-ink">
@@ -2180,7 +2225,7 @@
                         </form>
                     </div>
 
-                    <div class="lg:col-span-7 neo-card bg-white p-5 space-y-4">
+                    <div class="lg:col-span-7 neo-card surface-card p-5 space-y-4">
                         <div class="border-b-3 border-neo-ink pb-2.5 flex items-center justify-between">
                             <div>
                                 <h3 class="font-display font-extrabold text-base uppercase">Daftar Akun Pengurus & Batasan Akses</h3>
@@ -2192,13 +2237,13 @@
                 </div>
             </section>
 
-            <!-- ==================== ADMIN TAB 8: IDENTITAS, 2 LOGO KOP SHEET, MEDSOS, KALENDER LIBUR & SEMESTER ==================== -->
+            <!-- ==================== ADMIN TAB 8: IDENTITAS, SLIDESHOW LATAR, 2 LOGO KOP, SALURAN WA & SEMESTER ==================== -->
             <section id="adm-pengaturan" class="admin-section hidden space-y-8">
                 <form onsubmit="handleAdminSaveConfig(event)" class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                    <!-- Kolom Kiri: Identitas Sekolah & Kelas, Logo Header, 2 Logo Kop Sheet & Beranda (7 Cols) -->
-                    <div class="lg:col-span-7 neo-card bg-white p-5 space-y-4">
+                    <!-- Kolom Kiri: Identitas Sekolah & Kelas, Logo Header, 2 Logo Kop Sheet & Multi-Slide Latar (7 Cols) -->
+                    <div class="lg:col-span-7 neo-card surface-card p-5 space-y-4">
                         <h3 class="font-display font-extrabold text-base uppercase border-b-3 border-neo-ink pb-2.5">
-                            Pengaturan Identitas, Logo Website & 2 Logo Kop Sheet (.xls)
+                            Pengaturan Identitas, Logo Website, 2 Logo Kop Sheet & Slideshow Latar
                         </h3>
 
                         <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
@@ -2234,7 +2279,7 @@
                             </div>
                         </div>
 
-                        <!-- PENGATURAN 4 VISUAL UTAMA: LOGO HEADER WEB, LOGO SEKOLAH (KOP KIRI), LOGO KELAS (KOP KANAN), & FOTO LATAR -->
+                        <!-- PENGATURAN 4 VISUAL UTAMA -->
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-neo-surface p-4 border-2 border-neo-ink rounded-xl">
                             <!-- Box 1: Logo Header Website & Favicon -->
                             <div class="space-y-2">
@@ -2254,7 +2299,7 @@
                                 </div>
                             </div>
 
-                            <!-- Box 2: Logo Kelas (Tampil di Beranda & Kop Kanan Sheet) -->
+                            <!-- Box 2: Logo Kelas (Kop Kanan Sheet) -->
                             <div class="space-y-2">
                                 <div class="flex items-center justify-between">
                                     <label class="block font-display font-extrabold text-[11px] uppercase">2. Logo Kelas (Kop Kanan Sheet)</label>
@@ -2290,28 +2335,45 @@
                                 </div>
                             </div>
 
-                            <!-- Box 4: Foto Latar Beranda & Login -->
+                            <!-- Box 4: Foto Latar Utama Beranda & Login -->
                             <div class="space-y-2">
                                 <div class="flex items-center justify-between">
-                                    <label class="block font-display font-extrabold text-[11px] uppercase">4. Foto Latar Beranda & Login</label>
+                                    <label class="block font-display font-extrabold text-[11px] uppercase">4. Foto Latar Utama (Slide 1)</label>
                                     <button type="button" onclick="resetHeroBgToDefault()" class="text-[10px] font-bold text-rose-500 underline">Default</button>
                                 </div>
                                 <div class="flex items-center gap-3">
                                     <div class="w-14 h-14 rounded-xl bg-neo-ink border-2 border-neo-ink flex items-center justify-center overflow-hidden shrink-0 shadow-neo-sm">
                                         <img id="cfgHeroBgPreviewImg" src="" alt="Preview Latar" class="hidden w-full h-full object-cover">
-                                        <span id="cfgHeroBgPreviewFallback" class="font-mono font-bold text-[10px] text-white">LATAR</span>
+                                        <span id="cfgHeroBgPreviewFallback" class="font-mono font-bold text-[10px] text-white">SLIDE 1</span>
                                     </div>
                                     <div class="flex-1 min-w-0 space-y-1">
                                         <input type="file" accept="image/*" onchange="handleInstantConfigImage(event, 'cfgHeroBgUrl', 'cfgHeroBgPreviewImg', 'cfgHeroBgPreviewFallback')" class="block w-full text-[10px] file:mr-1.5 file:py-1 file:px-2 file:border file:border-neo-ink file:rounded file:font-bold file:bg-neo-orange file:text-neo-ink cursor-pointer">
-                                        <input type="text" id="cfgHeroBgUrl" oninput="syncConfigPreview('cfgHeroBgUrl', 'cfgHeroBgPreviewImg', 'cfgHeroBgPreviewFallback')" placeholder="URL Foto Latar..." class="neo-input w-full px-2 py-1 text-[11px] font-mono">
+                                        <input type="text" id="cfgHeroBgUrl" oninput="syncConfigPreview('cfgHeroBgUrl', 'cfgHeroBgPreviewImg', 'cfgHeroBgPreviewFallback')" placeholder="URL Foto Latar 1..." class="neo-input w-full px-2 py-1 text-[11px] font-mono">
                                     </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Tambahan Foto Slideshow Beranda (Slide 2 & Slide 3) -->
+                        <div class="bg-neo-surface p-3.5 border-2 border-neo-ink rounded-xl space-y-2">
+                            <span class="font-display font-extrabold text-xs uppercase block">
+                                <i class="fa-solid fa-images mr-1 text-neo-violet"></i> Foto Slideshow Tambahan Beranda (Berganti Otomatis)
+                            </span>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                <div>
+                                    <label class="block font-mono text-[10px] font-bold uppercase mb-1">Foto Slide 2 (Opsional)</label>
+                                    <input type="text" id="cfgHeroBgUrl2" placeholder="Tempel URL Foto Slide 2..." class="neo-input w-full px-2.5 py-1.5 text-xs font-mono">
+                                </div>
+                                <div>
+                                    <label class="block font-mono text-[10px] font-bold uppercase mb-1">Foto Slide 3 (Opsional)</label>
+                                    <input type="text" id="cfgHeroBgUrl3" placeholder="Tempel URL Foto Slide 3..." class="neo-input w-full px-2.5 py-1.5 text-xs font-mono">
                                 </div>
                             </div>
                         </div>
 
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                             <div>
-                                <label class="block font-display font-extrabold text-[11px] uppercase mb-1">Judul Sambutan Beranda</label>
+                                <label class="block font-display font-extrabold text-[11px] uppercase mb-1">Judul Sambutan Beranda (Typewriter)</label>
                                 <input type="text" id="cfgWelcomeTypingText" required placeholder="SELAMAT DATANG DI MEDIVANCE" class="neo-input w-full px-3 py-2 text-xs font-bold">
                             </div>
                             <div>
@@ -2330,10 +2392,12 @@
                             <input type="text" id="cfgMarqueeText" placeholder="Pengumuman singkat di bagian atas halaman..." class="neo-input w-full px-3 py-2 text-xs">
                         </div>
 
-                        <!-- PENGATURAN MEDIA SOSIAL FOOTER (IG, TIKTOK, EMAIL) -->
+                        <!-- PENGATURAN MEDIA SOSIAL FOOTER & SALURAN WA MEDIVANCE INFO -->
                         <div class="bg-neo-surface p-3.5 border-2 border-neo-ink rounded-xl space-y-2.5">
-                            <span class="font-display font-extrabold text-xs uppercase block"><i class="fa-solid fa-share-nodes mr-1"></i> Media Sosial & Kontak Kelas (Tampil di Kiri Bawah Web)</span>
-                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                            <span class="font-display font-extrabold text-xs uppercase block">
+                                <i class="fa-solid fa-share-nodes mr-1"></i> Media Sosial & Saluran WhatsApp Resmi (MEDIVANCE INFO)
+                            </span>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                                 <div>
                                     <label class="block font-mono text-[10px] font-bold uppercase mb-1"><i class="fa-brands fa-instagram text-pink-600"></i> Instagram Kelas</label>
                                     <input type="text" id="cfgSocialIg" placeholder="@medivance.class atau URL" class="neo-input w-full px-2.5 py-1.5 text-xs">
@@ -2346,13 +2410,17 @@
                                     <label class="block font-mono text-[10px] font-bold uppercase mb-1"><i class="fa-solid fa-envelope text-sky-600"></i> Email Resmi Kelas</label>
                                     <input type="text" id="cfgSocialEmail" placeholder="medivance@sekolah.sch.id" class="neo-input w-full px-2.5 py-1.5 text-xs">
                                 </div>
+                                <div>
+                                    <label class="block font-mono text-[10px] font-bold uppercase mb-1"><i class="fa-brands fa-whatsapp text-emerald-600"></i> Link Saluran WA (MEDIVANCE INFO)</label>
+                                    <input type="url" id="cfgWaChannelUrl" placeholder="https://whatsapp.com/channel/..." class="neo-input w-full px-2.5 py-1.5 text-xs font-mono">
+                                </div>
                             </div>
                         </div>
                     </div>
 
                     <!-- Kolom Kanan: Profil Wali Kelas, Parameter Kas & Kalender Libur (5 Cols) -->
                     <div class="lg:col-span-5 space-y-6">
-                        <div class="neo-card bg-white p-5 space-y-3.5">
+                        <div class="neo-card surface-card p-5 space-y-3.5">
                             <h3 class="font-display font-extrabold text-base uppercase border-b-3 border-neo-ink pb-2.5">
                                 Profil & Foto Wali Kelas
                             </h3>
@@ -2383,7 +2451,7 @@
                             </div>
                         </div>
 
-                        <div class="neo-card bg-white p-5 space-y-3.5">
+                        <div class="neo-card surface-card p-5 space-y-3.5">
                             <h3 class="font-display font-extrabold text-base uppercase border-b-3 border-neo-ink pb-2.5">Parameter Kas Mingguan</h3>
                             <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                                 <div>
@@ -2409,8 +2477,8 @@
                             </button>
                         </div>
 
-                        <!-- FITUR BARU: PENGATURAN HARI LIBUR KALENDER MINI -->
-                        <div class="neo-card bg-white p-5 space-y-3.5">
+                        <!-- PENGATURAN HARI LIBUR KALENDER MINI -->
+                        <div class="neo-card surface-card p-5 space-y-3.5">
                             <div class="flex items-center justify-between border-b-3 border-neo-ink pb-2.5">
                                 <div>
                                     <h3 class="font-display font-extrabold text-base uppercase">Kalender Hari Libur Kelas & Nasional</h3>
@@ -2435,17 +2503,15 @@
                                 </div>
                             </div>
 
-                            <div id="admHolidaysListContainer" class="space-y-1.5 max-h-44 overflow-y-auto pr-1">
-                                <!-- Diisi via kelas.js -->
-                            </div>
+                            <div id="admHolidaysListContainer" class="space-y-1.5 max-h-44 overflow-y-auto pr-1"></div>
                         </div>
                     </div>
                 </form>
 
                 <!-- ====================================================================== -->
-                <!-- FITUR MATANG: SISTEM SEMESTER BARU & BRANKAS ARSIP SEMESTER LALU       -->
+                <!-- SISTEM SEMESTER BARU & BRANKAS ARSIP SEMESTER LALU                     -->
                 <!-- ====================================================================== -->
-                <div id="semesterArchiveManagerCard" class="neo-card bg-white p-5 sm:p-7 space-y-6 border-4 border-neo-ink">
+                <div id="semesterArchiveManagerCard" class="neo-card surface-card p-5 sm:p-7 space-y-6 border-4 border-neo-ink">
                     <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-4 border-b-3 border-neo-ink">
                         <div>
                             <div class="flex flex-wrap items-center gap-2 mb-1.5">
@@ -2454,13 +2520,12 @@
                             </div>
                             <h3 class="font-display font-extrabold text-lg sm:text-2xl uppercase">Transisi Semester Baru Tanpa Kehilangan Data Lama</h3>
                             <p class="text-xs sm:text-sm font-semibold text-muted-adaptive mt-0.5">
-                                Simpan seluruh riwayat kas, tabel pelunasan Senin, rekap absensi, dan pengumuman semester berjalan ke dalam **Brankas Arsip Cloud**, lalu mulai lembaran semester baru dengan daftar siswa yang tetap tersimpan.
+                                Simpan seluruh riwayat kas, tabel pelunasan Senin, rekap absensi, dan pengumuman semester berjalan ke dalam Brankas Arsip Cloud, lalu mulai lembaran semester baru dengan daftar siswa yang tetap tersimpan.
                             </p>
                         </div>
                     </div>
 
                     <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                        <!-- Kolom Kiri (5 Cols): Wizard Mulai Semester Baru -->
                         <div class="lg:col-span-5 bg-neo-surface border-3 border-neo-ink rounded-xl p-5 space-y-4">
                             <div class="flex items-center gap-2.5 border-b-2 border-neo-ink pb-2.5">
                                 <span class="w-8 h-8 rounded-lg bg-neo-mint text-neo-ink border-2 border-neo-ink flex items-center justify-center font-extrabold text-xs">
@@ -2506,8 +2571,7 @@
                                 </div>
                             </div>
 
-                            <!-- Opsi Transisi Data -->
-                            <div class="bg-white border-2 border-neo-ink rounded-lg p-3 space-y-2 text-xs font-bold">
+                            <div class="surface-card border-2 border-neo-ink rounded-lg p-3 space-y-2 text-xs font-bold">
                                 <span class="font-mono text-[10px] font-extrabold uppercase text-muted-adaptive block">Opsi Data yang Dipertahankan:</span>
                                 <label class="flex items-center gap-2 cursor-pointer">
                                     <input type="checkbox" id="newSemesterKeepStructure" checked class="w-4 h-4 accent-neo-ink">
@@ -2528,7 +2592,6 @@
                             </button>
                         </div>
 
-                        <!-- Kolom Kanan (7 Cols): Daftar Brankas Arsip Semester Lalu -->
                         <div class="lg:col-span-7 space-y-3.5">
                             <div class="flex items-center justify-between border-b-2 border-neo-ink pb-2">
                                 <div>
@@ -2548,10 +2611,10 @@
     </main>
 
     <!-- ============================================================================ -->
-    <!-- MODAL 1: TEMPEL KERTAS WARNA-WARNI BARU                                      -->
+    <!-- MODAL 1: TEMPEL KERTAS WARNA-WARNI BIASA                                     -->
     <!-- ============================================================================ -->
     <div id="modalStickyNoteForm" class="fixed inset-0 z-50 hidden bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
-        <div class="neo-card bg-white w-full max-w-md p-5 sm:p-6 space-y-4">
+        <div class="neo-card surface-card w-full max-w-md p-5 sm:p-6 space-y-4">
             <div class="flex items-start justify-between border-b-3 border-neo-ink pb-3">
                 <div>
                     <span class="neo-badge bg-neo-pink text-neo-ink"><i class="fa-solid fa-thumbtack"></i> PAPAN TEMPEL KELAS</span>
@@ -2623,10 +2686,62 @@
     </div>
 
     <!-- ============================================================================ -->
-    <!-- MODAL 2: KARTU IURAN DIGITAL SISWA (KEUANGAN)                                -->
+    <!-- MODAL 2 (BARU): KIRIM PESAN RAHASIA ANONIM NGL (OTOMATIS HILANG 24 JAM)      -->
+    <!-- ============================================================================ -->
+    <div id="modalNglForm" class="fixed inset-0 z-50 hidden bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="neo-card overflow-hidden w-full max-w-md shadow-neo-xl">
+            <div class="bg-gradient-to-r from-neo-violet via-pink-500 to-neo-orange text-white p-5 border-b-3 border-neo-ink flex items-start justify-between">
+                <div class="space-y-1">
+                    <span class="neo-badge bg-neo-yellow text-neo-ink text-[10px]">
+                        <i class="fa-solid fa-user-secret"></i> 100% ANONIM • AKTIF 24 JAM
+                    </span>
+                    <h3 class="font-display font-extrabold text-xl uppercase leading-none pt-1">
+                        Kotak NGL Kelas Medivance
+                    </h3>
+                    <p class="text-[11px] font-semibold text-white/90">
+                        Identitasmu dirahasiakan sepenuhnya. Pesan otomatis terhapus setelah 24 jam.
+                    </p>
+                </div>
+                <button type="button" onclick="closeModal('modalNglForm')" class="neo-btn bg-neo-ink text-white w-8 h-8 text-xs shrink-0">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <form onsubmit="handleVisitorSendNgl(event)" class="surface-card p-5 space-y-4">
+                <div>
+                    <label class="block font-display font-extrabold text-xs uppercase mb-1">Topik Pesan Rahasia</label>
+                    <select id="nglPromptSelect" class="neo-input w-full px-3 py-2 text-xs font-bold">
+                        <option value="Kirim pesan anonim untuk kelas kita! 💬">Kirim pesan anonim untuk kelas kita! 💬</option>
+                        <option value="Pengakuan / Kejujuran Rahasia 🤫">Pengakuan / Kejujuran Rahasia 🤫</option>
+                        <option value="Apresiasi buat seseorang di kelas 🌟">Apresiasi buat seseorang di kelas 🌟</option>
+                        <option value="Saran & Masukan buat Kelas 💡">Saran & Masukan buat Kelas 💡</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block font-display font-extrabold text-xs uppercase mb-1">Tulis Pesan Rahasiamu *</label>
+                    <textarea
+                        id="nglMessageInput"
+                        required
+                        rows="4"
+                        maxlength="200"
+                        placeholder="Ketik pesan anonim di sini... tidak ada yang tahu siapa pengirimnya!"
+                        class="neo-input w-full px-3.5 py-2.5 text-xs sm:text-sm"
+                    ></textarea>
+                </div>
+
+                <button type="submit" class="neo-btn bg-neo-violet text-white w-full py-3.5 text-xs sm:text-sm">
+                    <i class="fa-solid fa-paper-plane"></i> Kirim Pesan Anonim Sekarang!
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ============================================================================ -->
+    <!-- MODAL 3: KARTU PASSBOOK IURAN DIGITAL SISWA (KEUANGAN)                       -->
     <!-- ============================================================================ -->
     <div id="modalStudentCard" class="fixed inset-0 z-50 hidden bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
-        <div class="neo-card bg-white w-full max-w-xl p-5 sm:p-6 space-y-4 max-h-[90vh] flex flex-col">
+        <div class="neo-card surface-card w-full max-w-xl p-5 sm:p-6 space-y-4 max-h-[90vh] flex flex-col">
             <div class="flex items-start justify-between border-b-3 border-neo-ink pb-3 shrink-0 gap-3">
                 <div class="flex items-center gap-3 min-w-0">
                     <div id="cardStudentAvatarBox" class="w-14 h-14 rounded-xl bg-neo-yellow border-2.5 border-neo-ink shadow-neo-sm overflow-hidden shrink-0 flex items-center justify-center font-display font-extrabold text-base text-neo-ink">
@@ -2669,10 +2784,10 @@
     </div>
 
     <!-- ============================================================================ -->
-    <!-- MODAL 3 (BARU): KARTU NAMA / ID CARD DIGITAL ANGGOTA KELAS                   -->
+    <!-- MODAL 4: MINIMALIST STUDENT ID CARD DIGITAL ANGGOTA KELAS                    -->
     <!-- ============================================================================ -->
     <div id="modalStudentIdCard" class="fixed inset-0 z-50 hidden bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
-        <div class="neo-card bg-white w-full max-w-md overflow-hidden relative shadow-neo-xl">
+        <div class="neo-card surface-card w-full max-w-md overflow-hidden relative shadow-neo-xl">
             <!-- Lubang Lanyard Kartu ID di Bagian Atas -->
             <div class="bg-neo-ink pt-3 pb-2.5 px-4 flex items-center justify-between border-b-3 border-neo-ink">
                 <span id="idCardClassBadge" class="neo-badge bg-neo-yellow text-neo-ink font-mono text-[10px]">
@@ -2730,7 +2845,7 @@
                 <!-- Barcode Dekoratif & Tombol Lihat Kartu Kas -->
                 <div class="pt-2 border-t-2 border-dashed border-neo-ink/30 flex items-center justify-between gap-3">
                     <div class="font-mono text-[10px] font-extrabold text-muted-adaptive">
-                        <i class="fa-solid fa-barcode text-lg block text-neo-ink"></i>
+                        <i class="fa-solid fa-barcode text-lg block text-main-adaptive"></i>
                         <span id="idCardSerialCode">ID-MDV-001</span>
                     </div>
                     <button type="button" id="btnSwitchIdToFeeCard" class="neo-btn bg-neo-mint text-neo-ink px-3.5 py-2 text-xs">
@@ -2742,10 +2857,10 @@
     </div>
 
     <!-- ============================================================================ -->
-    <!-- MODAL 4: LIGHTBOX FOTO ALBUM & LAMPIRAN FOTO TUGAS                           -->
+    <!-- MODAL 5: LIGHTBOX FOTO ALBUM & LAMPIRAN FOTO TUGAS                           -->
     <!-- ============================================================================ -->
     <div id="modalAlbumLightbox" class="fixed inset-0 z-50 hidden bg-black/85 backdrop-blur-xs flex items-center justify-center p-4">
-        <div class="neo-card bg-white w-full max-w-2xl overflow-hidden">
+        <div class="neo-card surface-card w-full max-w-2xl overflow-hidden">
             <div class="flex items-center justify-between px-4 py-3 bg-neo-yellow border-b-3 border-neo-ink">
                 <span id="lightboxCategory" class="neo-badge bg-white text-neo-ink">DOKUMENTASI</span>
                 <button type="button" onclick="closeModal('modalAlbumLightbox')" class="neo-btn bg-neo-coral text-white w-8 h-8 text-xs">
@@ -2770,12 +2885,12 @@
     <div id="toastContainer" class="fixed bottom-5 right-4 z-50 flex flex-col gap-2 max-w-xs sm:max-w-sm w-full pointer-events-none"></div>
 
     <!-- ============================================================================ -->
-    <!-- FOOTER PUBLIK BARU: KIRI (MEDSOS), TENGAH (NAMA & LEGAL ©), KANAN (KALENDER) -->
+    <!-- FOOTER PUBLIK: KIRI (MEDSOS & SALURAN WA), TENGAH (LEGAL ©), KANAN (KALENDER)-->
     <!-- ============================================================================ -->
-    <footer id="publicFooter" class="mt-auto border-t-4 border-neo-ink bg-white pt-8 pb-6 px-4 sm:px-6 lg:px-8 transition-colors">
+    <footer id="publicFooter" class="mt-auto border-t-4 border-neo-ink surface-card pt-8 pb-6 px-4 sm:px-6 lg:px-8 transition-colors">
         <div class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
 
-            <!-- SEBELAH KIRI (4 Cols): Media Sosial Resmi Kelas (IG, TikTok, Email) -->
+            <!-- SEBELAH KIRI (4 Cols): Media Sosial Resmi Kelas (IG, TikTok, Email & Saluran WA) -->
             <div class="lg:col-span-4 space-y-3">
                 <div class="inline-flex items-center gap-2">
                     <span class="w-3 h-3 rounded-full bg-neo-mint border border-neo-ink"></span>
@@ -2784,7 +2899,7 @@
                 <p class="text-xs font-semibold text-muted-adaptive leading-relaxed">
                     Ikuti saluran media sosial resmi kelas untuk melihat keseruan harian, karya siswa, dan informasi terbaru.
                 </p>
-                <div class="flex flex-wrap items-center gap-2.5 pt-1">
+                <div class="flex flex-wrap items-center gap-2 pt-1">
                     <a id="footerSocialIg" href="#" target="_blank" rel="noopener noreferrer" class="neo-btn bg-neo-pink text-neo-ink px-3 py-2 text-xs">
                         <i class="fa-brands fa-instagram text-sm"></i>
                         <span id="footerSocialIgText">Instagram</span>
@@ -2797,10 +2912,14 @@
                         <i class="fa-solid fa-envelope text-sm"></i>
                         <span id="footerSocialEmailText">Email</span>
                     </a>
+                    <a id="footerWaChannelBtn" href="#" target="_blank" rel="noopener noreferrer" class="hidden neo-btn bg-neo-lime text-neo-ink px-3 py-2 text-xs">
+                        <i class="fa-brands fa-whatsapp text-sm"></i>
+                        <span>Saluran WA</span>
+                    </a>
                 </div>
             </div>
 
-            <!-- SEBELAH TENGAH (4 Cols): Identitas Kecil Nama Kelas, Navigasi & Legal Copyright @ -->
+            <!-- SEBELAH TENGAH (4 Cols): Identitas Kecil Nama Kelas, Navigasi & Legal Copyright © -->
             <div class="lg:col-span-4 flex flex-col items-center justify-center text-center space-y-2.5 my-auto py-2 border-y-2 lg:border-y-0 lg:border-x-2 border-dashed border-neo-ink/25 px-4">
                 <div class="w-10 h-10 rounded-xl bg-neo-yellow text-neo-ink border-2 border-neo-ink shadow-neo-sm flex items-center justify-center font-display font-extrabold text-xs overflow-hidden">
                     <img id="footerSmallLogoImg" src="" alt="Logo" class="hidden w-full h-full object-cover">
@@ -2845,13 +2964,13 @@
                             </span>
                         </div>
                         <div class="flex items-center gap-1">
-                            <button type="button" onclick="changeMiniCalendarMonth(-1)" class="neo-btn bg-white text-neo-ink w-6 h-6 text-[10px]" title="Bulan Sebelumnya">
+                            <button type="button" onclick="changeMiniCalendarMonth(-1)" class="neo-btn surface-card w-6 h-6 text-[10px]" title="Bulan Sebelumnya">
                                 <i class="fa-solid fa-chevron-left"></i>
                             </button>
                             <button type="button" onclick="changeMiniCalendarMonth(0)" class="neo-btn bg-neo-yellow text-neo-ink px-1.5 h-6 text-[9px] font-mono" title="Bulan Ini">
                                 Hari Ini
                             </button>
-                            <button type="button" onclick="changeMiniCalendarMonth(1)" class="neo-btn bg-white text-neo-ink w-6 h-6 text-[10px]" title="Bulan Berikutnya">
+                            <button type="button" onclick="changeMiniCalendarMonth(1)" class="neo-btn surface-card w-6 h-6 text-[10px]" title="Bulan Berikutnya">
                                 <i class="fa-solid fa-chevron-right"></i>
                             </button>
                         </div>
@@ -2869,22 +2988,19 @@
                     </div>
 
                     <!-- Grid Tanggal Kalender Mini -->
-                    <div id="miniCalendarDaysGrid" class="grid grid-cols-7 gap-1 text-center font-mono text-[11px] font-bold">
-                        <!-- Diisi via kelas.js -->
-                    </div>
+                    <div id="miniCalendarDaysGrid" class="grid grid-cols-7 gap-1 text-center font-mono text-[11px] font-bold"></div>
 
                     <!-- Keterangan Hari Libur Bulan Ini -->
-                    <div id="miniCalendarHolidaysNote" class="pt-1.5 border-t border-neo-ink/20 text-[10px] font-bold space-y-1">
-                        <!-- Diisi via kelas.js -->
-                    </div>
+                    <div id="miniCalendarHolidaysNote" class="pt-1.5 border-t border-neo-ink/20 text-[10px] font-bold space-y-1"></div>
                 </div>
             </div>
 
         </div>
     </footer>
 
-    <!-- File JavaScript Modular (Firebase & Logika Kelas) -->
+    <!-- File JavaScript Modular -->
     <script type="module" src="./firebase.js"></script>
-    <script type="module" src="./kelas.js"></script>
+<script type="module" src="./user.js"></script>
+<script type="module" src="./admin.js"></script>
 </body>
 </html>

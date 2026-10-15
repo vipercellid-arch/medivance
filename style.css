@@ -1,5 +1,5 @@
 /* ==========================================================================
-   STYLE.CSS — PORTAL KELAS RESMI & KAS DIGITAL (NEO-BRUTALISM + DARK MODE)
+   STYLE.CSS — PORTAL KELAS RESMI & KAS DIGITAL MEDIVANCE (NEO-BRUTALISM)
    ========================================================================== */
 
 :root {
@@ -12,7 +12,7 @@
     --border-color: #111111;
     --shadow-color: #111111;
     --dot-color: rgba(17, 17, 17, 0.20);
-    --table-row-hover: rgba(255, 230, 0, 0.14);
+    --table-row-hover: rgba(255, 230, 0, 0.16);
 }
 
 html.dark {
@@ -25,10 +25,13 @@ html.dark {
     --border-color: #334155;
     --shadow-color: #020617;
     --dot-color: rgba(255, 255, 255, 0.09);
-    --table-row-hover: rgba(56, 189, 248, 0.10);
+    --table-row-hover: rgba(56, 189, 248, 0.12);
 }
 
-/* Base Body Styling */
+/* ==========================================================================
+   BASE BODY & ADAPTIVE COLOR UTILITIES
+   ========================================================================== */
+
 body {
     background-color: var(--bg-cream);
     background-image: radial-gradient(var(--dot-color) 1.15px, transparent 1.15px);
@@ -40,11 +43,24 @@ body {
     transition: background-color 0.25s ease, color 0.25s ease;
 }
 
+.surface-card {
+    background-color: var(--card-bg);
+    color: var(--text-main);
+    transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
+}
+
+.text-main-adaptive {
+    color: var(--text-main);
+}
+
 .text-muted-adaptive {
     color: var(--text-muted);
 }
 
-/* Neo-Brutalist Cards */
+/* ==========================================================================
+   KOMPONEN UTAMA NEO-BRUTALISM (CARD, BUTTON, INPUT, BADGE)
+   ========================================================================== */
+
 .neo-card {
     background-color: var(--card-bg);
     border: 3px solid var(--border-color);
@@ -67,7 +83,6 @@ body {
     box-shadow: 8px 8px 0px 0px var(--shadow-color);
 }
 
-/* Neo-Brutalist Buttons */
 .neo-btn {
     border: 2.5px solid #111111;
     box-shadow: 3px 3px 0px 0px var(--shadow-color);
@@ -98,7 +113,6 @@ body {
     transform: none !important;
 }
 
-/* Neo-Brutalist Inputs, Selects & Textareas */
 .neo-input {
     border: 2.5px solid var(--border-color);
     box-shadow: 3px 3px 0px 0px var(--shadow-color);
@@ -127,7 +141,6 @@ body {
     background-color: var(--surface-bg);
 }
 
-/* Badges */
 .neo-badge {
     border: 2px solid #111111;
     box-shadow: 2px 2px 0px 0px rgba(0, 0, 0, 0.85);
@@ -140,7 +153,10 @@ body {
     gap: 0.3rem;
 }
 
-/* Tombol Mode Absensi (Per Hari | Per Minggu | Per Bulan) */
+/* ==========================================================================
+   TOMBOL MODE ABSENSI & FILTER KATEGORI
+   ========================================================================== */
+
 .att-mode-btn {
     color: #111111;
     border: 2px solid transparent;
@@ -153,7 +169,27 @@ body {
     box-shadow: 2px 2px 0px 0px #111111;
 }
 
-/* Sel Kalender Mini di Footer */
+.filter-pill-btn.active,
+.drawer-nav-item.active {
+    background-color: #FFE600 !important;
+    color: #111111 !important;
+    border-color: #111111 !important;
+    transform: translate(1.5px, 1.5px);
+    box-shadow: 2px 2px 0px 0px var(--shadow-color);
+}
+
+.admin-nav-btn.active {
+    background-color: #00F5D4 !important;
+    color: #111111 !important;
+    border-color: #111111 !important;
+    transform: translate(1.5px, 1.5px);
+    box-shadow: 2px 2px 0px 0px var(--shadow-color);
+}
+
+/* ==========================================================================
+   KALENDER MINI FOOTER (SABTU, MINGGU & HARI LIBUR MERAH)
+   ========================================================================== */
+
 .mini-cal-cell {
     height: 1.75rem;
     display: flex;
@@ -184,7 +220,6 @@ html.dark .mini-cal-cell.is-weekend:not(.is-holiday) {
 }
 
 .mini-cal-cell.is-today {
-    ring: 2px solid #111111;
     background-color: #FFE600 !important;
     color: #111111 !important;
     border: 2px solid #111111 !important;
@@ -209,19 +244,23 @@ html.dark #workspace-admin {
     color: var(--text-main) !important;
 }
 
+html.dark .surface-card,
 html.dark .neo-card.bg-white,
 html.dark .bg-white.neo-card,
-html.dark footer#publicFooter,
-html.dark .lg\:col-span-5.bg-white {
+html.dark footer#publicFooter {
     background-color: var(--card-bg) !important;
     color: var(--text-main) !important;
     border-color: var(--border-color) !important;
 }
 
-/* Kartu Aksen Warna tetap cerah & teks gelap tajam */
+/* Kartu Aksen Warna tetap cerah dengan teks gelap tajam */
 html.dark .kpi-accent-card,
 html.dark .neo-card.bg-neo-yellow,
-html.dark .neo-card.bg-neo-lime {
+html.dark .neo-card.bg-neo-lime,
+html.dark .neo-card.bg-neo-mint,
+html.dark .neo-card.bg-neo-sky,
+html.dark .neo-card.bg-neo-pink,
+html.dark .neo-card.bg-neo-orange {
     color: #111111 !important;
     border-color: #111111 !important;
 }
@@ -238,8 +277,7 @@ html.dark .bg-neo-bg {
     border-color: var(--border-color) !important;
 }
 
-/* Tombol Putih & Filter Pill di Mode Gelap agar Teks Selalu Terbaca Jelas */
-html.dark .neo-btn.bg-white:not(.active),
+html.dark .neo-btn.surface-card:not(.active),
 html.dark .filter-pill-btn:not(.active),
 html.dark .drawer-nav-item:not(.active),
 html.dark .admin-nav-btn:not(.active) {
@@ -248,29 +286,11 @@ html.dark .admin-nav-btn:not(.active) {
     border-color: #475569 !important;
 }
 
-html.dark .neo-btn.bg-white:hover:not(.active),
+html.dark .neo-btn.surface-card:hover:not(.active),
 html.dark .filter-pill-btn:hover:not(.active),
 html.dark .drawer-nav-item:hover:not(.active),
 html.dark .admin-nav-btn:hover:not(.active) {
     background-color: #334155 !important;
-}
-
-/* Tombol Filter / Nav yang Sedang Aktif */
-.filter-pill-btn.active,
-.drawer-nav-item.active {
-    background-color: #FFE600 !important;
-    color: #111111 !important;
-    border-color: #111111 !important;
-    transform: translate(1.5px, 1.5px);
-    box-shadow: 2px 2px 0px 0px var(--shadow-color);
-}
-
-.admin-nav-btn.active {
-    background-color: #00F5D4 !important;
-    color: #111111 !important;
-    border-color: #111111 !important;
-    transform: translate(1.5px, 1.5px);
-    box-shadow: 2px 2px 0px 0px var(--shadow-color);
 }
 
 /* Tabel di Mode Terang & Gelap */
@@ -296,7 +316,7 @@ html.dark input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 }
 
 /* ==========================================================================
-   ANIMASI MARQUEE, HERO & REVEAL DASHBOARD (ANTI-BLANK)
+   ANIMASI VARIASI PERPINDAHAN TAB, SLIDESHOW HERO & SCROLL REVEAL
    ========================================================================== */
 
 @keyframes marquee {
@@ -314,21 +334,6 @@ html.dark input[type="datetime-local"]::-webkit-calendar-picker-indicator {
     animation-play-state: paused;
 }
 
-@keyframes heroPhotoReveal {
-    0% {
-        opacity: 0;
-        transform: scale(1.04) translateY(8px);
-    }
-    100% {
-        opacity: 1;
-        transform: scale(1) translateY(0);
-    }
-}
-
-.hero-photo-animate {
-    animation: heroPhotoReveal 0.65s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
 @keyframes floatSlow {
     0%, 100% { transform: translateY(0px); }
     50% { transform: translateY(-5px); }
@@ -338,10 +343,48 @@ html.dark input[type="datetime-local"]::-webkit-calendar-picker-indicator {
     animation: floatSlow 4.5s ease-in-out infinite;
 }
 
-@keyframes neoRevealUp {
+/* 4 Variasi Animasi Perpindahan Tab */
+@keyframes tabSlideIn {
+    0% { opacity: 0; transform: translateY(18px); }
+    100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes tabPopIn {
+    0% { opacity: 0; transform: scale(0.97) translateY(10px); }
+    100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes tabFlipIn {
+    0% { opacity: 0; transform: perspective(800px) rotateX(4deg) translateY(12px); }
+    100% { opacity: 1; transform: perspective(800px) rotateX(0deg) translateY(0); }
+}
+
+@keyframes tabZoomIn {
+    0% { opacity: 0; transform: scale(0.95); }
+    100% { opacity: 1; transform: scale(1); }
+}
+
+.tab-view-anim-slide {
+    animation: tabSlideIn 0.38s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.tab-view-anim-pop {
+    animation: tabPopIn 0.36s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.tab-view-anim-flip {
+    animation: tabFlipIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.tab-view-anim-zoom {
+    animation: tabZoomIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Animasi Scroll Kartu (Dijamin 100% Tampil Tanpa Pernah Blank) */
+@keyframes neoCardReveal {
     0% {
         opacity: 0;
-        transform: translateY(18px);
+        transform: translateY(16px);
     }
     100% {
         opacity: 1;
@@ -349,22 +392,43 @@ html.dark input[type="datetime-local"]::-webkit-calendar-picker-indicator {
     }
 }
 
+.scroll-anim-card,
 .reveal-on-scroll {
     opacity: 1;
     transform: translateY(0);
-    animation: neoRevealUp 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation: neoCardReveal 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Efek Kursor Mengetik Berkedip (Looping Typewriter) */
+@keyframes cursorBlink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
 }
 
 .typewriter-cursor {
     display: inline-block;
-    width: 3px;
+    width: 3.5px;
     height: 1.05em;
     background-color: #FFE600;
-    margin-left: 4px;
+    margin-left: 5px;
     vertical-align: middle;
+    animation: cursorBlink 0.85s step-end infinite;
 }
 
-/* Wind Sway & Stick Animations for Sticky Notes Board */
+/* Transisi Halus Pergantian Foto Slideshow Hero */
+@keyframes heroCrossfade {
+    0% { opacity: 0.35; transform: scale(1.04); }
+    100% { opacity: 1; transform: scale(1); }
+}
+
+.hero-slide-fade {
+    animation: heroCrossfade 0.65s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* ==========================================================================
+   PAPAN TEMPEL KERTAS & KARTU NGL ANONIM 24 JAM
+   ========================================================================== */
+
 @keyframes windSwayOdd {
     0%, 100% { transform: rotate(-1.5deg) translateY(0px); }
     50% { transform: rotate(1.6deg) translateY(-3px) translateX(2px); }
@@ -416,6 +480,13 @@ html.dark input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 
 .sticky-just-added {
     animation: slapStickNote 0.45s cubic-bezier(0.22, 1, 0.36, 1) forwards !important;
+}
+
+/* Gaya Khusus Kartu NGL Anonim di Papan Tempel */
+.ngl-note-card {
+    background: linear-gradient(135deg, #9B5DE5 0%, #EC4899 55%, #FF9F1C 100%) !important;
+    color: #FFFFFF !important;
+    border: 3px solid #111111 !important;
 }
 
 /* Corkboard Pattern for Sticky Wall */
