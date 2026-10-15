@@ -1,5 +1,5 @@
 // ============================================================================
-// FIREBASE.JS — MESIN SINKRONISASI CLOUD REAL-TIME MULTI-DEVICE (MEDIVANCE)
+// FIREBASE.JS — FAST PARALLEL ANONYMOUS AUTH & REAL-TIME SYNC (MEDIVANCE)
 // ============================================================================
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
@@ -7,9 +7,7 @@ import { getAnalytics, isSupported } from "https://www.gstatic.com/firebasejs/11
 import {
     getAuth,
     signInAnonymously,
-    signInWithCustomToken,
-    signInWithEmailAndPassword,
-    signOut
+    signInWithCustomToken
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import {
     getFirestore,
@@ -55,30 +53,54 @@ isSupported()
     })
     .catch(() => {});
 
-// Kunci ID Seragam agar seluruh perangkat (HP/Tablet/Laptop) membaca & menulis ke titik yang sama
 const APP_ID_SLUG = "portal-kelas-utama";
 
-// Jalur Penyimpanan Cloud Firestore (Root & Artifacts)
+// Jalur Penyimpanan Cloud Firestore & Realtime Database
 const FS_ROOT_MAIN_DOC = doc(db, "portal_kelas_store", "main_state");
 const FS_ROOT_CHUNKS_COL = ["portal_kelas_chunks"];
 const FS_ART_MAIN_DOC = doc(db, "artifacts", APP_ID_SLUG, "public", "data", "portal_kelas_store", "main_state");
 const FS_ART_CHUNKS_COL = ["artifacts", APP_ID_SLUG, "public", "data", "portal_kelas_chunks"];
 const FS_ART_ADMINS_COL = ["artifacts", APP_ID_SLUG, "public", "data", "admins"];
 
-// Jalur Penyimpanan Firebase Realtime Database (Asia-Southeast1)
 const RTDB_MAIN_PATH = `portal_kelas/${APP_ID_SLUG}/main_state`;
 const RTDB_ADMINS_PATH = `portal_kelas/${APP_ID_SLUG}/admins`;
 
-// Batas aman per chunk dokumen Firestore (650 KB agar di bawah batas 1 MB Firestore)
 const CHUNK_SIZE_LIMIT = 650000;
 
-// Pelacak revisi terakhir agar tidak terjadi duplikasi render di perangkat yang sama
 let lastDeliveredRevision = "";
 let hasLoadedNonEmptyData = false;
+let anonymousAuthPromise = null;
 
 /**
- * Menghitung kelengkapan isi data untuk mencegah state kosong menimpa state yang sudah berisi data
+ * SINGLETON ANONYMOUS AUTH:
+ * Langsung berjalan sekali di latar belakang tanpa membuat antrean berulang.
  */
+export function ensureAuthReady() {
+    if (auth.currentUser) return Promise.resolve(auth.currentUser);
+    if (anonymousAuthPromise) return anonymousAuthPromise;
+
+    anonymousAuthPromise = (async () => {
+        try {
+            if (typeof __initial_auth_token !== "undefined" && __initial_auth_token) {
+                const cred = await signInWithCustomToken(auth, __initial_auth_token);
+                return cred.user;
+            } else {
+                const cred = await signInAnonymously(auth);
+                return cred.user;
+            }
+        } catch (e) {
+            return null;
+        } finally {
+            anonymousAuthPromise = null;
+        }
+    })();
+
+    return anonymousAuthPromise;
+}
+
+// Langsung picu Login Anonim pada detik pertama file dimuat (0ms delay)
+ensureAuthReady();
+
 export function calculateDataRichness(stateObj) {
     if (!stateObj || typeof stateObj !== "object") return 0;
     const stuCount = Array.isArray(stateObj.students) ? stateObj.students.length : 0;
@@ -104,16 +126,12 @@ export function calculateDataRichness(stateObj) {
     );
 }
 
-/**
- * Meneruskan pembaruan state ke tampilan web secara real-time
- */
 function deliverRealtimeState(onStateReceived, stateObj, updatedAt, source) {
     if (!stateObj || typeof stateObj !== "object") return;
 
     const incomingRichness = calculateDataRichness(stateObj);
     const revKey = `${updatedAt || "no-ts"}_${incomingRichness}`;
 
-    // Cegah jalur yang masih kosong menimpa data yang sudah terisi di layar
     if (hasLoadedNonEmptyData && incomingRichness === 0 && !updatedAt) {
         return;
     }
@@ -130,9 +148,6 @@ function deliverRealtimeState(onStateReceived, stateObj, updatedAt, source) {
     onStateReceived(stateObj, updatedAt || new Date().toISOString(), source);
 }
 
-/**
- * Normalisasi data akun pengurus beserta Hak Akses Bertingkat (Granular RBAC)
- */
 export function parseAdminRecord(id, data) {
     if (!data || typeof data !== "object") return null;
     const rawUser = String(data.username || data.email || id || "").trim().toLowerCase();
@@ -174,27 +189,6 @@ export function parseAdminRecord(id, data) {
     };
 }
 
-/**
- * Mencoba mengaktifkan sesi anonim jika tersedia di Firebase Auth,
- * namun TIDAK menghalangi pengunjung publik apabila Anonymous Auth dimatikan
- */
-export async function ensureAuthReady() {
-    try {
-        if (typeof __initial_auth_token !== "undefined" && __initial_auth_token) {
-            if (!auth.currentUser) {
-                await signInWithCustomToken(auth, __initial_auth_token);
-            }
-        } else if (!auth.currentUser) {
-            await signInAnonymously(auth);
-        }
-    } catch (e) {
-        // Tetap lanjutkan akses publik tanpa sesi login
-    }
-}
-
-/**
- * Menyatukan kembali dokumen pecahan (chunks) dari Cloud Firestore
- */
 async function assembleChunksFromPath(colPathArray, totalChunks) {
     try {
         const promises = [];
@@ -213,9 +207,6 @@ async function assembleChunksFromPath(colPathArray, totalChunks) {
     }
 }
 
-/**
- * Mengurai snapshot dokumen utama Firestore (baik mode tunggal maupun multi-chunk)
- */
 async function parseFirestoreSnapshot(snapshot, chunkColPath) {
     if (!snapshot || !snapshot.exists()) return null;
     const data = snapshot.data();
@@ -233,18 +224,24 @@ async function parseFirestoreSnapshot(snapshot, chunkColPath) {
 }
 
 /**
- * Menarik data paling mutakhir dari seluruh jalur Firebase saat perangkat baru membuka web
+ * PENGAMBILAN DATA AWAL SECARA PARALEL (SERENTAK TANPA ANTREAN)
  */
 export async function fetchInitialPortalStateFromCloud() {
-    await ensureAuthReady();
+    // Jalankan login anonim di latar belakang tanpa memblokir pembacaan publik
+    ensureAuthReady();
+
     const candidates = [];
 
-    // 1. Tarik dari Firebase Realtime Database
-    try {
-        const rtSnap = await dbGet(dbRef(rtdb, RTDB_MAIN_PATH));
-        if (rtSnap.exists()) {
-            const val = rtSnap.val();
-            if (val && val.payload) {
+    const [rtResult, rootResult, artResult] = await Promise.allSettled([
+        dbGet(dbRef(rtdb, RTDB_MAIN_PATH)),
+        getDoc(FS_ROOT_MAIN_DOC),
+        getDoc(FS_ART_MAIN_DOC)
+    ]);
+
+    if (rtResult.status === "fulfilled" && rtResult.value.exists()) {
+        const val = rtResult.value.val();
+        if (val && val.payload) {
+            try {
                 const parsed = typeof val.payload === "string" ? JSON.parse(val.payload) : val.payload;
                 candidates.push({
                     state: parsed,
@@ -252,14 +249,12 @@ export async function fetchInitialPortalStateFromCloud() {
                     richness: calculateDataRichness(parsed),
                     source: "rtdb-init"
                 });
-            }
+            } catch (e) {}
         }
-    } catch (e) {}
+    }
 
-    // 2. Tarik dari Firestore Root Collection
-    try {
-        const rootSnap = await getDoc(FS_ROOT_MAIN_DOC);
-        const res = await parseFirestoreSnapshot(rootSnap, FS_ROOT_CHUNKS_COL);
+    if (rootResult.status === "fulfilled") {
+        const res = await parseFirestoreSnapshot(rootResult.value, FS_ROOT_CHUNKS_COL);
         if (res && res.state) {
             candidates.push({
                 state: res.state,
@@ -268,12 +263,10 @@ export async function fetchInitialPortalStateFromCloud() {
                 source: "fs-root-init"
             });
         }
-    } catch (e) {}
+    }
 
-    // 3. Tarik dari Firestore Artifacts Collection
-    try {
-        const artSnap = await getDoc(FS_ART_MAIN_DOC);
-        const res = await parseFirestoreSnapshot(artSnap, FS_ART_CHUNKS_COL);
+    if (artResult.status === "fulfilled") {
+        const res = await parseFirestoreSnapshot(artResult.value, FS_ART_CHUNKS_COL);
         if (res && res.state) {
             candidates.push({
                 state: res.state,
@@ -282,11 +275,10 @@ export async function fetchInitialPortalStateFromCloud() {
                 source: "fs-art-init"
             });
         }
-    } catch (e) {}
+    }
 
     if (candidates.length === 0) return null;
 
-    // Utamakan yang memiliki timestamp terbaru; jika sama, pilih yang datanya paling lengkap
     candidates.sort((a, b) => {
         if (b.richness > 0 && a.richness === 0) return 1;
         if (a.richness > 0 && b.richness === 0) return -1;
@@ -299,61 +291,51 @@ export async function fetchInitialPortalStateFromCloud() {
 }
 
 /**
- * Mengambil seluruh daftar akun pengurus langsung dari server Firebase
+ * PENGAMBILAN DAFTAR AKUN PENGURUS SECARA PARALEL (CEPAT)
  */
 export async function fetchAllAdminsFromCloud() {
-    await ensureAuthReady();
+    ensureAuthReady();
     const collected = [];
 
-    try {
-        const rtSnap = await dbGet(dbRef(rtdb, RTDB_ADMINS_PATH));
-        if (rtSnap.exists()) {
-            const rawObj = rtSnap.val() || {};
-            Object.keys(rawObj).forEach((k) => {
-                const parsed = parseAdminRecord(k, rawObj[k]);
-                if (parsed) collected.push(parsed);
-            });
-        }
-    } catch (e) {}
+    const [rtSnap, artSnap, rootAdminsSnap] = await Promise.allSettled([
+        dbGet(dbRef(rtdb, RTDB_ADMINS_PATH)),
+        getDocs(collection(db, ...FS_ART_ADMINS_COL)),
+        getDocs(collection(db, "admins"))
+    ]);
 
-    try {
-        const snap = await getDocs(collection(db, ...FS_ART_ADMINS_COL));
-        snap.forEach((d) => {
+    if (rtSnap.status === "fulfilled" && rtSnap.value.exists()) {
+        const rawObj = rtSnap.value.val() || {};
+        Object.keys(rawObj).forEach((k) => {
+            const parsed = parseAdminRecord(k, rawObj[k]);
+            if (parsed) collected.push(parsed);
+        });
+    }
+
+    if (artSnap.status === "fulfilled") {
+        artSnap.value.forEach((d) => {
             const parsed = parseAdminRecord(d.id, d.data());
             if (parsed) collected.push(parsed);
         });
-    } catch (e) {}
+    }
 
-    for (const colName of ["admins", "admin", "users"]) {
-        try {
-            const snap = await getDocs(collection(db, colName));
-            snap.forEach((d) => {
-                const parsed = parseAdminRecord(d.id, d.data());
-                if (parsed) collected.push(parsed);
-            });
-        } catch (e) {}
+    if (rootAdminsSnap.status === "fulfilled") {
+        rootAdminsSnap.value.forEach((d) => {
+            const parsed = parseAdminRecord(d.id, d.data());
+            if (parsed) collected.push(parsed);
+        });
     }
 
     return collected;
 }
 
 /**
- * Mengaktifkan Listener Real-Time agar setiap perubahan di Panel Admin
- * langsung mengubah tampilan di semua HP/Perangkat tanpa perlu refresh
+ * LISTENER REAL-TIME INSTAN (TANPA MENUNGGU AUTH SELESAI DULU)
  */
 export async function initCloudSynchronization({ onStateReceived, onAdminsReceived, onConnectionStatus }) {
-    await ensureAuthReady();
+    // Jalankan login anonim secara paralel di latar belakang
+    ensureAuthReady();
 
-    // 1. Ambil state awal yang paling lengkap terlebih dahulu
-    try {
-        const initial = await fetchInitialPortalStateFromCloud();
-        if (initial && initial.state) {
-            if (onConnectionStatus) onConnectionStatus(true);
-            deliverRealtimeState(onStateReceived, initial.state, initial.updatedAt, initial.source);
-        }
-    } catch (e) {}
-
-    // 2. Listener Real-Time: Firebase Realtime Database
+    // 1. Pasang Listener Realtime Database seketika (Paling cepat merespons)
     try {
         onValue(
             dbRef(rtdb, RTDB_MAIN_PATH),
@@ -368,13 +350,11 @@ export async function initCloudSynchronization({ onStateReceived, onAdminsReceiv
                     } catch (err) {}
                 }
             },
-            (err) => {
-                console.warn("RTDB Live Listener:", err?.message || err);
-            }
+            () => {}
         );
     } catch (e) {}
 
-    // 3. Listener Real-Time: Firestore Root Document
+    // 2. Pasang Listener Firestore Root & Artifacts seketika
     try {
         onSnapshot(
             FS_ROOT_MAIN_DOC,
@@ -389,7 +369,6 @@ export async function initCloudSynchronization({ onStateReceived, onAdminsReceiv
         );
     } catch (e) {}
 
-    // 4. Listener Real-Time: Firestore Artifacts Document
     try {
         onSnapshot(
             FS_ART_MAIN_DOC,
@@ -404,7 +383,7 @@ export async function initCloudSynchronization({ onStateReceived, onAdminsReceiv
         );
     } catch (e) {}
 
-    // 5. Listener Real-Time: Koleksi Akun Pengurus
+    // 3. Pasang Listener Daftar Akun Admin seketika
     try {
         onValue(
             dbRef(rtdb, RTDB_ADMINS_PATH),
@@ -437,27 +416,17 @@ export async function initCloudSynchronization({ onStateReceived, onAdminsReceiv
         );
     } catch (e) {}
 
-    ["admins", "admin"].forEach((colName) => {
-        try {
-            onSnapshot(
-                collection(db, colName),
-                (snap) => {
-                    const list = [];
-                    snap.forEach((d) => {
-                        const parsed = parseAdminRecord(d.id, d.data());
-                        if (parsed) list.push(parsed);
-                    });
-                    if (list.length > 0) onAdminsReceived(list, `fs-${colName}`);
-                },
-                () => {}
-            );
-        } catch (e) {}
-    });
+    // 4. Tarik juga snapshot paralel awal untuk memastikan jalur terbaik terpilih
+    fetchInitialPortalStateFromCloud()
+        .then((initial) => {
+            if (initial && initial.state) {
+                if (onConnectionStatus) onConnectionStatus(true);
+                deliverRealtimeState(onStateReceived, initial.state, initial.updatedAt, initial.source);
+            }
+        })
+        .catch(() => {});
 }
 
-/**
- * Helper menulis ke satu jalur Firestore (otomatis memecah dokumen menjadi chunks jika > 650 KB)
- */
 async function writeToFirestorePath(mainDocRef, chunkColPath, serialized, timestamp, actorUsername) {
     if (serialized.length <= CHUNK_SIZE_LIMIT) {
         await setDoc(mainDocRef, {
@@ -491,11 +460,8 @@ async function writeToFirestorePath(mainDocRef, chunkColPath, serialized, timest
     }
 }
 
-/**
- * Menyimpan seluruh state aplikasi secara paralel ke Realtime Database & Cloud Firestore
- */
 export async function savePortalStateToCloud(appData, actorUsername = "admin") {
-    await ensureAuthReady();
+    ensureAuthReady();
     const timestamp = new Date().toISOString();
     const richness = calculateDataRichness(appData);
     lastDeliveredRevision = `${timestamp}_${richness}`;
@@ -517,11 +483,8 @@ export async function savePortalStateToCloud(appData, actorUsername = "admin") {
     return { ok: anySucceeded, updatedAt: timestamp };
 }
 
-/**
- * Menyimpan atau memperbarui akun pengurus langsung ke seluruh jalur Firebase
- */
 export async function saveAdminAccountToCloud(accountObj) {
-    await ensureAuthReady();
+    ensureAuthReady();
     const cleanUser = String(accountObj.username).trim().toLowerCase();
     const safeKey = cleanUser.replace(/[.#$/[\]]/g, "_");
 
@@ -532,11 +495,8 @@ export async function saveAdminAccountToCloud(accountObj) {
     ]);
 }
 
-/**
- * Menghapus akun pengurus secara permanen dari seluruh jalur Firebase
- */
 export async function deleteAdminAccountFromCloud(username) {
-    await ensureAuthReady();
+    ensureAuthReady();
     const cleanUser = String(username).trim().toLowerCase();
     const safeKey = cleanUser.replace(/[.#$/[\]]/g, "_");
 
@@ -548,19 +508,12 @@ export async function deleteAdminAccountFromCloud(username) {
     ]);
 }
 
-/**
- * Login menggunakan Firebase Authentication (Email & Password)
- */
-export async function loginWithFirebaseAuth(email, password) {
-    return await signInWithEmailAndPassword(auth, email, password);
+// Fungsi kompatibilitas agar import di admin.js tetap berjalan tanpa perlu signOut dari sesi anonim
+export async function loginWithFirebaseAuth() {
+    return await ensureAuthReady();
 }
 
-/**
- * Logout dari sesi Firebase Authentication
- */
 export async function logoutFirebaseSession() {
-    try {
-        await signOut(auth);
-        await signInAnonymously(auth);
-    } catch (e) {}
+    // Pertahankan koneksi anonim tetap hidup agar penarikan data publik tidak terputus saat admin keluar
+    return await ensureAuthReady();
 }

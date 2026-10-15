@@ -105,7 +105,7 @@ export const DEFAULT_DATABASE_STATE = {
 };
 
 // ============================================================================
-// SHARED STATE OBJEK (DAPAT DIAKSES OLEH USER.JS & ADMIN.JS)
+// SHARED STATE OBJEK (TERHUBUNG PENUH DENGAN ADMIN.JS)
 // ============================================================================
 
 export const portalState = {
@@ -134,7 +134,7 @@ export const portalState = {
 
 window.portalState = portalState;
 
-// State Internal Slideshow Hero, Typewriter & Kalender Mini
+// State Internal Slideshow Hero, Typewriter, Scroll Observer & Kalender Mini
 let heroSlideIndex = 0;
 let heroSlideInterval = null;
 let typewriterTimer = null;
@@ -147,6 +147,57 @@ let miniCalYear = new Date().getFullYear();
 let miniCalMonth = new Date().getMonth();
 let secretTapCount = 0;
 let secretTapTimer = null;
+let bidirectionalObserver = null;
+
+// Pastikan style pendukung teks tanggal vertikal & animasi scroll dua arah tersedia
+function injectSupportingUtilities() {
+    if (document.getElementById("medivanceDynamicStyles")) return;
+    const styleEl = document.createElement("style");
+    styleEl.id = "medivanceDynamicStyles";
+    styleEl.textContent = `
+        .writing-vertical {
+            writing-mode: vertical-rl;
+            transform: rotate(180deg);
+            white-space: nowrap;
+            display: inline-block;
+        }
+        .scroll-anim-card {
+            transition: opacity 0.42s cubic-bezier(0.16, 1, 0.3, 1), transform 0.42s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .scroll-anim-card.scroll-hidden {
+            opacity: 0.15;
+            transform: translateY(18px) scale(0.985);
+        }
+        .scroll-anim-card.scroll-visible {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+    `;
+    document.head.appendChild(styleEl);
+}
+
+function initBidirectionalScrollObserver() {
+    if (!("IntersectionObserver" in window)) return;
+    if (!bidirectionalObserver) {
+        bidirectionalObserver = new IntersectionObserver(
+            (entries) => {
+                entries.forEach((entry) => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.remove("scroll-hidden");
+                        entry.target.classList.add("scroll-visible");
+                    } else {
+                        entry.target.classList.remove("scroll-visible");
+                        entry.target.classList.add("scroll-hidden");
+                    }
+                });
+            },
+            { threshold: 0.06, rootMargin: "20px 0px -15px 0px" }
+        );
+    }
+    document.querySelectorAll(".scroll-anim-card").forEach((el) => {
+        bidirectionalObserver.observe(el);
+    });
+}
 
 // ============================================================================
 // SINKRONISASI DATA FIREBASE & PEMBERSIH OTOMATIS (FOTO TUGAS & NGL 24 JAM)
@@ -253,8 +304,8 @@ window.saveToCloudDatabase = saveToCloudDatabase;
 
 /**
  * Pembersih Otomatis:
- * 1. Menghapus lampiran foto tugas yang sudah lewat waktu deadline (teks tugas tetap ada).
- * 2. Menghapus pesan anonim NGL yang sudah melewati batas 24 jam.
+ * 1. Menghapus lampiran foto tugas yang sudah lewat waktu deadline (teks pengumuman tetap tersimpan).
+ * 2. Menghapus pesan anonim NGL yang sudah melewati batas waktu 24 jam.
  */
 export async function cleanExpiredTaskPhotos(manualNotify = false) {
     const nowMs = Date.now();
@@ -287,7 +338,7 @@ export async function cleanExpiredTaskPhotos(manualNotify = false) {
 
     if (cleanedPhotos > 0 || cleanedNgl > 0) {
         await saveToCloudDatabase(
-            `Pembersihan otomatis: ${cleanedPhotos} foto tugas lewat deadline & ${cleanedNgl} NGL >24 jam dibersihkan!`
+            `Pembersihan otomatis: ${cleanedPhotos} foto lewat deadline & ${cleanedNgl} NGL >24 jam dibersihkan!`
         );
     } else if (manualNotify) {
         showToast("Penyimpanan bersih! Tidak ada foto lewat deadline atau NGL kadaluarsa.", "bg-neo-yellow");
@@ -298,7 +349,7 @@ export async function cleanExpiredTaskPhotos(manualNotify = false) {
 window.cleanExpiredTaskPhotos = cleanExpiredTaskPhotos;
 
 // ============================================================================
-// MODE GELAP (DARK MODE) & NAVIGASI UMUM
+// MODE GELAP (DARK MODE) & NAVIGASI WORKSPACE
 // ============================================================================
 
 export function applyThemeState(dark) {
@@ -352,14 +403,14 @@ export function updateWorkspaceVisibility() {
         previewBanner?.classList.remove("hidden");
         btnReturnTop?.classList.remove("hidden");
         if (typeof window.saveAdminSessionToStorage === "function") window.saveAdminSessionToStorage();
-        switchTab(portalState.activeTabId || "dashboard");
+        window.switchTab(portalState.activeTabId || "dashboard");
         renderAllViews();
     } else {
         portalState.activeWorkspace = "user";
         publicChrome?.classList.remove("hidden");
         userMain?.classList.remove("hidden");
         publicFooter?.classList.remove("hidden");
-        switchTab(portalState.activeTabId || "dashboard");
+        window.switchTab(portalState.activeTabId || "dashboard");
         renderAllViews();
     }
 }
@@ -412,7 +463,7 @@ window.toggleDrawerMenu = function (open) {
 
 window.navigateFromDrawer = function (tabId) {
     window.toggleDrawerMenu(false);
-    switchTab(tabId);
+    window.switchTab(tabId);
 };
 
 window.handleSecretClassNameTap = function () {
@@ -444,6 +495,7 @@ window.switchTab = function (tabId) {
     });
     if (portalState.activeTabId === "absensi") renderPublicAttendanceView();
     window.scrollTo({ top: 0, behavior: "smooth" });
+    setTimeout(initBidirectionalScrollObserver, 60);
 };
 
 // ============================================================================
@@ -472,7 +524,7 @@ export function renderHeroSlideshowUI() {
         };
         if (heroImg.getAttribute("src") !== currentUrl) {
             heroImg.classList.remove("hero-slide-fade");
-            void heroImg.offsetWidth; // Reflow trigger
+            void heroImg.offsetWidth;
             heroImg.src = currentUrl;
             heroImg.classList.add("hero-slide-fade");
         }
@@ -908,7 +960,7 @@ export function renderMiniCalendar() {
 
     const firstDayObj = new Date(miniCalYear, miniCalMonth, 1);
     const totalDays = new Date(miniCalYear, miniCalMonth + 1, 0).getDate();
-    const startOffset = (firstDayObj.getDay() + 6) % 7; // Senin = 0 ... Sabtu = 5, Minggu = 6
+    const startOffset = (firstDayObj.getDay() + 6) % 7;
     const todayIso = toLocalISODate(new Date());
     const holidaysList = Array.isArray(portalState.appData.config.holidays) ? portalState.appData.config.holidays : [];
 
@@ -1424,7 +1476,6 @@ window.downloadNglStoryImage = function (noteId) {
     canvas.height = 1920;
     const ctx = canvas.getContext("2d");
 
-    // Background Gradient Neo-Brutalist
     const grad = ctx.createLinearGradient(0, 0, 1080, 1920);
     grad.addColorStop(0, "#111111");
     grad.addColorStop(0.5, "#2E1065");
@@ -1432,18 +1483,15 @@ window.downloadNglStoryImage = function (noteId) {
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, 1080, 1920);
 
-    // Card Shadow
     ctx.fillStyle = "#FFE600";
     ctx.fillRect(115, 515, 870, 890);
 
-    // Main Card Container
     ctx.fillStyle = "#FFFFFF";
     ctx.strokeStyle = "#111111";
     ctx.lineWidth = 12;
     ctx.fillRect(95, 495, 870, 890);
     ctx.strokeRect(95, 495, 870, 890);
 
-    // Top Header Banner inside Card
     const topGrad = ctx.createLinearGradient(95, 495, 965, 680);
     topGrad.addColorStop(0, "#9B5DE5");
     topGrad.addColorStop(0.5, "#EC4899");
@@ -1460,7 +1508,6 @@ window.downloadNglStoryImage = function (noteId) {
     ctx.fillStyle = "#FFE600";
     ctx.fillText(note.tag || "Kirim pesan anonim untuk kelas kita!", 530, 635);
 
-    // Message Body Wrapping
     ctx.fillStyle = "#111111";
     ctx.font = "800 44px sans-serif";
     const words = `"${note.message}"`.split(" ");
@@ -1484,7 +1531,6 @@ window.downloadNglStoryImage = function (noteId) {
         startY += 66;
     });
 
-    // Footer inside Card
     ctx.fillStyle = "#525252";
     ctx.font = "700 26px monospace";
     ctx.fillText(`${cfg.schoolName || "SMA NEGERI 5 AMBON"} • "${cfg.classMotto || "Together We Grow"}"`, 530, 1320);
@@ -1500,7 +1546,7 @@ window.downloadNglStoryImage = function (noteId) {
 };
 
 // ============================================================================
-// TABEL IURAN KAS, PASSBOOK MODAL, ABSENSI PUBLIK, INFO, JADWAL, ALBUM & SISWA
+// TABEL IURAN KAS (HEADER TANGGAL VERTIKAL), PASSBOOK MODAL & BUKU MUTASI
 // ============================================================================
 
 window.handleQuickCheck = function (query) {
@@ -1565,7 +1611,15 @@ window.renderIuranMatrix = function () {
     document.getElementById("keuanganPaymentInfo").textContent = portalState.appData.config.paymentInfo || "";
 
     const dateColsHtml = mondays
-        .map((dateStr) => `<th class="py-2.5 px-2 border-r-2 border-neutral-700 text-center min-w-[66px]"><div class="text-[9px] text-neo-yellow font-normal">SENIN</div><div>${formatShortMondayLabel(dateStr)}</div></th>`)
+        .map(
+            (dateStr) => `
+            <th class="py-2.5 px-1 border-r-2 border-neutral-700 text-center w-11">
+                <div class="writing-vertical mx-auto font-mono text-[10px] tracking-tighter leading-none py-1">
+                    <span class="text-neo-yellow font-normal block mb-1">SEN</span>
+                    <span>${formatShortMondayLabel(dateStr)}</span>
+                </div>
+            </th>`
+        )
         .join("");
 
     thead.innerHTML = `
@@ -1616,10 +1670,11 @@ window.renderIuranMatrix = function () {
                             .map((dateStr) => {
                                 const paid = Boolean(stu.paidDates[dateStr]);
                                 return `
-                                    <td class="py-1.5 px-1.5 border-r-2 border-neo-ink text-center">
+                                    <td class="py-1.5 px-1 border-r-2 border-neo-ink text-center">
                                         <span
                                             onclick="openStudentCardModal(${stu.id})"
-                                            class="cursor-pointer inline-block w-full py-1 px-1.5 rounded border-2 border-neo-ink font-mono text-[10px] font-extrabold ${paid ? "bg-neo-lime text-neo-ink" : "bg-rose-200 text-rose-900"}"
+                                            title="Senin, ${dateStr}"
+                                            class="cursor-pointer inline-block w-full py-1 px-1 rounded border-2 border-neo-ink font-mono text-[10px] font-extrabold ${paid ? "bg-neo-lime text-neo-ink" : "bg-rose-200 text-rose-900"}"
                                         >
                                             ${paid ? "✓" : "✕"}
                                         </span>
@@ -1762,7 +1817,10 @@ window.renderLedgerTable = function () {
     tbody.innerHTML = rowsHtml;
 };
 
-// --- Absensi Publik (Harian, Mingguan, Bulanan) ---
+// ============================================================================
+// ABSENSI PUBLIK (HARIAN, MINGGUAN, BULANAN), INFO, JADWAL, ALBUM & SISWA
+// ============================================================================
+
 const STATUS_BADGE_MAP = {
     H: `<span class="neo-badge bg-neo-lime text-neo-ink">✓ H</span>`,
     I: `<span class="neo-badge bg-neo-sky text-neo-ink">✉ I</span>`,
@@ -2011,7 +2069,7 @@ export function renderInfoBoard() {
     grid.innerHTML = items
         .map(
             (item) => `
-            <article class="neo-card surface-card p-5 flex flex-col justify-between space-y-3">
+            <article class="neo-card surface-card p-5 flex flex-col justify-between space-y-3 scroll-anim-card">
                 <div class="space-y-3">
                     <div class="flex items-center justify-between gap-2">
                         <span class="neo-badge ${headerColors[item.category] || "bg-neo-surface text-neo-ink"}">${item.category}</span>
@@ -2083,7 +2141,7 @@ export function renderScheduleAndPiket() {
         .map((day) => {
             const lessons = portalState.appData.schedule[day] || [];
             return `
-                <div class="neo-card surface-card overflow-hidden flex flex-col">
+                <div class="neo-card surface-card overflow-hidden flex flex-col scroll-anim-card">
                     <div class="${dayColors[day] || "bg-neo-yellow text-neo-ink"} border-b-3 border-neo-ink px-4 py-2.5 flex items-center justify-between">
                         <h3 class="font-display font-extrabold text-base uppercase">HARI ${day}</h3>
                         <span class="font-mono text-[11px] font-bold bg-white text-neo-ink border-2 border-neo-ink px-2 py-0.5 rounded">${lessons.length} Mapel</span>
@@ -2180,7 +2238,7 @@ window.renderAlbumGallery = function () {
     grid.innerHTML = filtered
         .map(
             (item) => `
-            <div onclick="openAlbumLightbox(${item.id})" class="cursor-pointer neo-card neo-card-hover surface-card overflow-hidden flex flex-col">
+            <div onclick="openAlbumLightbox(${item.id})" class="cursor-pointer neo-card neo-card-hover surface-card overflow-hidden flex flex-col scroll-anim-card">
                 <div class="h-48 sm:h-52 bg-neo-surface border-b-3 border-neo-ink relative overflow-hidden">
                     <img
                         src="${item.url}"
@@ -2281,7 +2339,7 @@ window.renderStudentDirectory = function () {
             dirGrid.innerHTML = filtered
                 .map(
                     (s) => `
-                    <div onclick="openStudentIdCardModal(${s.id})" class="cursor-pointer neo-card neo-card-hover p-4 bg-neo-bg flex flex-col justify-between space-y-3">
+                    <div onclick="openStudentIdCardModal(${s.id})" class="cursor-pointer neo-card neo-card-hover p-4 bg-neo-bg flex flex-col justify-between space-y-3 scroll-anim-card">
                         <div class="flex items-start gap-3">
                             ${renderAvatarHtml(s.name, s.photoUrl, "w-14 h-14", "text-sm")}
                             <div class="min-w-0 flex-1">
@@ -2659,6 +2717,7 @@ export function renderAllViews() {
     if (portalState.activeWorkspace === "admin" && portalState.currentAdmin && typeof window.renderAdminWorkspace === "function") {
         try { window.renderAdminWorkspace(); } catch (e) { console.error(e); }
     }
+    setTimeout(initBidirectionalScrollObserver, 50);
 }
 
 window.renderAllViews = renderAllViews;
@@ -2679,6 +2738,8 @@ function updateClock() {
 }
 
 window.addEventListener("DOMContentLoaded", () => {
+    injectSupportingUtilities();
+
     try {
         const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
         if (savedTheme === "1") applyThemeState(true);
