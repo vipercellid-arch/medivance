@@ -1,5 +1,5 @@
 /* ==========================================================================
-   STYLE.CSS — PORTAL KELAS RESMI & KAS DIGITAL (NEO-BRUTALISM + DARK MODE)
+   STYLE.CSS — NEO-BRUTALISM UI & MODE GELAP SELARAS
    ========================================================================== */
 
 :root {
@@ -12,7 +12,7 @@
     --border-color: #111111;
     --shadow-color: #111111;
     --dot-color: rgba(17, 17, 17, 0.20);
-    --table-row-hover: rgba(255, 230, 0, 0.14);
+    --table-row-hover: rgba(255, 230, 0, 0.15);
 }
 
 html.dark {
@@ -24,14 +24,13 @@ html.dark {
     --text-muted: #94A3B8;
     --border-color: #334155;
     --shadow-color: #020617;
-    --dot-color: rgba(255, 255, 255, 0.09);
-    --table-row-hover: rgba(56, 189, 248, 0.10);
+    --dot-color: rgba(255, 255, 255, 0.08);
+    --table-row-hover: rgba(56, 189, 248, 0.12);
 }
 
-/* Base Body Styling */
 body {
     background-color: var(--bg-cream);
-    background-image: radial-gradient(var(--dot-color) 1.15px, transparent 1.15px);
+    background-image: radial-gradient(var(--dot-color) 1.2px, transparent 1.2px);
     background-size: 22px 22px;
     color: var(--text-main);
     font-family: 'Plus Jakarta Sans', sans-serif;
@@ -44,14 +43,14 @@ body {
     color: var(--text-muted);
 }
 
-/* Neo-Brutalist Cards */
+/* Kartu Neo-Brutalisme */
 .neo-card {
     background-color: var(--card-bg);
     border: 3px solid var(--border-color);
     box-shadow: 4px 4px 0px 0px var(--shadow-color);
-    border-radius: 0.85rem;
-    transition: transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1),
-                box-shadow 0.22s ease,
+    border-radius: 0.9rem;
+    transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1),
+                box-shadow 0.2s ease,
                 background-color 0.25s ease,
                 border-color 0.25s ease;
 }
@@ -67,11 +66,11 @@ body {
     box-shadow: 8px 8px 0px 0px var(--shadow-color);
 }
 
-/* Neo-Brutalist Buttons */
+/* Tombol Neo-Brutalisme */
 .neo-btn {
     border: 2.5px solid #111111;
     box-shadow: 3px 3px 0px 0px var(--shadow-color);
-    border-radius: 0.55rem;
+    border-radius: 0.6rem;
     font-weight: 800;
     transition: all 0.14s cubic-bezier(0.2, 0, 0, 1);
     cursor: pointer;
@@ -93,15 +92,15 @@ body {
 }
 
 .neo-btn:disabled {
-    opacity: 0.65;
+    opacity: 0.6;
     cursor: not-allowed;
 }
 
-/* Neo-Brutalist Inputs, Selects & Textareas */
+/* Input, Select & Textarea */
 .neo-input {
     border: 2.5px solid var(--border-color);
     box-shadow: 3px 3px 0px 0px var(--shadow-color);
-    border-radius: 0.55rem;
+    border-radius: 0.6rem;
     background-color: var(--card-bg);
     color: var(--text-main);
     font-weight: 600;
@@ -120,11 +119,11 @@ body {
     border-color: #00BBF9;
 }
 
-/* Badges */
+/* Lencana / Badge */
 .neo-badge {
     border: 2px solid #111111;
     box-shadow: 2px 2px 0px 0px rgba(0, 0, 0, 0.85);
-    border-radius: 0.4rem;
+    border-radius: 0.42rem;
     font-weight: 800;
     font-size: 0.7rem;
     padding: 0.15rem 0.55rem;
@@ -133,16 +132,57 @@ body {
     gap: 0.3rem;
 }
 
+/* Tombol Status Absensi (H / S / I / A) */
+.att-status-btn {
+    border: 2px solid #111111;
+    border-radius: 0.45rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 800;
+    font-size: 0.7rem;
+    padding: 0.28rem 0.55rem;
+    transition: all 0.12s ease;
+    cursor: pointer;
+}
+
+.att-status-btn.active-H {
+    background-color: #A3E635 !important;
+    color: #111111 !important;
+    box-shadow: 2px 2px 0px 0px #111111;
+    transform: translate(-1px, -1px);
+}
+
+.att-status-btn.active-S {
+    background-color: #00BBF9 !important;
+    color: #111111 !important;
+    box-shadow: 2px 2px 0px 0px #111111;
+    transform: translate(-1px, -1px);
+}
+
+.att-status-btn.active-I {
+    background-color: #FFE600 !important;
+    color: #111111 !important;
+    box-shadow: 2px 2px 0px 0px #111111;
+    transform: translate(-1px, -1px);
+}
+
+.att-status-btn.active-A {
+    background-color: #FF5E5B !important;
+    color: #FFFFFF !important;
+    box-shadow: 2px 2px 0px 0px #111111;
+    transform: translate(-1px, -1px);
+}
+
 /* ==========================================================================
-   HARMONISASI MODE GELAP (DARK MODE) MENYELURUH & SELARAS
+   KESELARASAN PENUH MODE GELAP (DARK MODE)
    ========================================================================== */
 
 html.dark header {
-    background-color: rgba(15, 23, 42, 0.95) !important;
+    background-color: rgba(15, 23, 42, 0.96) !important;
     border-color: #334155 !important;
 }
 
 html.dark #navDrawerPanel,
+html.dark #adminDrawerPanel,
 html.dark #workspace-login,
 html.dark #workspace-admin {
     background-color: var(--bg-cream) !important;
@@ -158,9 +198,9 @@ html.dark .lg\:col-span-5.bg-white {
     border-color: var(--border-color) !important;
 }
 
-/* Kartu Aksen Warna (Mint, Sky, Pink, Orange, Yellow) tetap cerah & teks gelap tajam */
 html.dark .kpi-accent-card,
-html.dark .neo-card.bg-neo-yellow {
+html.dark .neo-card.bg-neo-yellow,
+html.dark .neo-card.bg-neo-orange {
     color: #111111 !important;
     border-color: #111111 !important;
 }
@@ -177,11 +217,11 @@ html.dark .bg-neo-bg {
     border-color: var(--border-color) !important;
 }
 
-/* Tombol Putih & Filter Pill di Mode Gelap agar Teks Selalu Terbaca Jelas */
 html.dark .neo-btn.bg-white:not(.active),
 html.dark .filter-pill-btn:not(.active),
 html.dark .drawer-nav-item:not(.active),
-html.dark .admin-nav-btn:not(.active) {
+html.dark .admin-nav-btn:not(.active),
+html.dark .att-status-btn:not([class*="active-"]) {
     background-color: #1E293B !important;
     color: #F8FAFC !important;
     border-color: #475569 !important;
@@ -194,7 +234,6 @@ html.dark .admin-nav-btn:hover:not(.active) {
     background-color: #334155 !important;
 }
 
-/* Tombol Filter / Nav yang Sedang Aktif */
 .filter-pill-btn.active,
 .drawer-nav-item.active {
     background-color: #FFE600 !important;
@@ -212,7 +251,6 @@ html.dark .admin-nav-btn:hover:not(.active) {
     box-shadow: 2px 2px 0px 0px var(--shadow-color);
 }
 
-/* Tabel di Mode Terang & Gelap */
 .neo-table tbody {
     background-color: var(--card-bg);
     color: var(--text-main);
@@ -233,7 +271,7 @@ html.dark input[type="time"]::-webkit-calendar-picker-indicator {
 }
 
 /* ==========================================================================
-   ANIMASI MARQUEE, HERO, TYPEWRITER & PAPAN TEMPEL KERTAS
+   ANIMASI TEKS BERJALAN, HERO & KERTAS PAPAN TEMPEL
    ========================================================================== */
 
 @keyframes marquee {
@@ -275,7 +313,6 @@ html.dark input[type="time"]::-webkit-calendar-picker-indicator {
     animation: floatSlow 4.5s ease-in-out infinite;
 }
 
-/* Scroll Reveal From Bottom */
 .reveal-on-scroll {
     opacity: 0;
     transform: translateY(28px) scale(0.99);
@@ -298,7 +335,6 @@ html.dark input[type="time"]::-webkit-calendar-picker-indicator {
     vertical-align: middle;
 }
 
-/* Wind Sway & Stick Animations for Sticky Notes Board */
 @keyframes windSwayOdd {
     0%, 100% { transform: rotate(-1.5deg) translateY(0px); }
     50% { transform: rotate(1.6deg) translateY(-3px) translateX(2px); }
@@ -352,7 +388,6 @@ html.dark input[type="time"]::-webkit-calendar-picker-indicator {
     animation: slapStickNote 0.45s cubic-bezier(0.22, 1, 0.36, 1) forwards !important;
 }
 
-/* Corkboard Pattern for Sticky Wall */
 .corkboard-surface {
     background-color: #E7DEC8;
     background-image:
@@ -369,7 +404,6 @@ html.dark .corkboard-surface {
         radial-gradient(#2D2823 1.2px, #1E1B18 1.2px);
 }
 
-/* Utility Scrollbar Hide */
 .no-scrollbar::-webkit-scrollbar {
     display: none;
 }
