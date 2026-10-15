@@ -1,5 +1,5 @@
 // ============================================================================
-// ADMIN.JS — MESIN WORKSPACE PENGURUS, STRICT RBAC, ABSENSI & ARSIP SEMESTER
+// ADMIN.JS — MESIN WORKSPACE PENGURUS, BATCH SAVE KAS, RBAC & ARSIP SEMESTER
 // ============================================================================
 
 import {
@@ -148,7 +148,7 @@ window.handleAdminLoginSubmit = async function (e) {
         });
     };
 
-    // 1. Cek langsung di memori yang sudah tersinkronisasi (Instan tanpa jeda)
+    // 1. Cek langsung di memori yang sudah tersinkronisasi (Instan < 0.05 detik)
     let authenticatedProfile = findMatchingAdmin();
 
     // 2. Jika belum ketemu di memori, tarik paralel cepat dari Cloud
@@ -176,7 +176,6 @@ window.handleAdminLoginSubmit = async function (e) {
         return;
     }
 
-    // Pastikan sesi anonim aktif di latar belakang
     loginWithFirebaseAuth();
 
     portalState.currentAdmin = authenticatedProfile;
@@ -190,6 +189,7 @@ window.handleAdminLoginSubmit = async function (e) {
 
 window.logoutAdmin = async function () {
     portalState.currentAdmin = null;
+    portalState.pendingIuranChanges = {};
     try { localStorage.removeItem(ADMIN_SESSION_STORAGE_KEY); } catch (e) {}
     await logoutFirebaseSession();
     const loginText = document.getElementById("drawerAdminLoginText");
@@ -278,7 +278,7 @@ window.switchAdminTab = function (sectionId) {
         "adm-keuangan": "1. KAS, SENIN & SHEET",
         "adm-absensi": "2. ABSENSI DIGITAL",
         "adm-siswa": "3. MASTER ANGGOTA",
-        "adm-info": "4. TUGAS, NGL & MADING",
+        "adm-info": "4. TUGAS, WA & NGL",
         "adm-jadwal": "5. JADWAL & PILIH JAM",
         "adm-album": "6. GALERI ALBUM",
         "adm-akun": "7. AKUN & HAK AKSES",
@@ -312,6 +312,31 @@ window.switchAdminTab = function (sectionId) {
 // 3. RENDER BERANDA ADMIN & SELURUH TAB MODUL WORKSPACE PENGURUS
 // ============================================================================
 
+function updateBatchIuranIndicatorUI() {
+    const pendingKeys = Object.keys(portalState.pendingIuranChanges || {});
+    const count = pendingKeys.length;
+    const badge = document.getElementById("unsavedIuranBadge");
+    const discardBtn = document.getElementById("btnDiscardBatchIuran");
+    const commitBtn = document.getElementById("btnCommitBatchIuran");
+
+    if (badge) {
+        badge.textContent = `${count} Perubahan Belum Disimpan`;
+        badge.classList.toggle("hidden", count === 0);
+    }
+    if (discardBtn) {
+        discardBtn.classList.toggle("hidden", count === 0);
+    }
+    if (commitBtn) {
+        if (count > 0) {
+            commitBtn.className = "neo-btn bg-neo-yellow text-neo-ink px-3.5 py-2 text-xs ring-2 ring-neo-ink";
+            commitBtn.innerHTML = `<i class="fa-solid fa-cloud-arrow-up"></i> Simpan ${count} Perubahan Kas`;
+        } else {
+            commitBtn.className = "neo-btn bg-neo-mint text-neo-ink px-3.5 py-2 text-xs";
+            commitBtn.innerHTML = `<i class="fa-solid fa-cloud-arrow-up"></i> Update & Simpan Iuran`;
+        }
+    }
+}
+
 function renderAdminHomeSection(stats) {
     const appData = portalState.appData;
     const cfg = appData.config;
@@ -327,7 +352,7 @@ function renderAdminHomeSection(stats) {
         { id: "adm-keuangan", perm: "keuangan", icon: "fa-coins", bg: "bg-neo-mint", title: "1. Kas & Pelunasan Senin", desc: `Saldo: ${formatRupiah(stats.currentBalance)} • Kepatuhan ${stats.complianceRatio}%` },
         { id: "adm-absensi", perm: "absensi", icon: "fa-clipboard-user", bg: "bg-neo-lime", title: "2. Absensi Digital (H/M/B)", desc: `${Object.keys(appData.attendance || {}).length} Hari Kehadiran Tercatat` },
         { id: "adm-siswa", perm: "siswa", icon: "fa-user-graduate", bg: "bg-neo-sky", title: "3. Master Data Anggota", desc: `${appData.students.length} Anggota & ID Card` },
-        { id: "adm-info", perm: "info", icon: "fa-bullhorn", bg: "bg-neo-yellow", title: "4. Tugas, NGL & Mading", desc: `${appData.announcements.length} Tugas • ${(appData.stickyNotes || []).length} Pesan Mading/NGL` },
+        { id: "adm-info", perm: "info", icon: "fa-bullhorn", bg: "bg-neo-yellow", title: "4. Tugas, WA & NGL", desc: `${appData.announcements.length} Tugas • ${(appData.stickyNotes || []).length} Pesan Mading/NGL` },
         { id: "adm-jadwal", perm: "jadwal", icon: "fa-calendar-days", bg: "bg-neo-pink", title: "5. Jadwal & Pilih Jam", desc: "Susunan Mapel Senin s/d Sabtu" },
         { id: "adm-album", perm: "album", icon: "fa-camera-retro", bg: "bg-neo-orange", title: "6. Galeri Album Kelas", desc: `${appData.albums.length} Dokumentasi Tersimpan` },
         { id: "adm-akun", perm: "akun", icon: "fa-users-gear", bg: "surface-card", title: "7. Akun & Hak Akses RBAC", desc: `${getAllCombinedAdmins().length} Akun Pengurus Terdaftar` },
@@ -421,6 +446,7 @@ window.renderAdminWorkspace = function () {
     document.getElementById("admStatSticky").textContent = `${(appData.stickyNotes || []).length} Pesan`;
 
     renderAdminHomeSection(stats);
+    updateBatchIuranIndicatorUI();
 
     // Kunci Periode Senin untuk Bendahara Operasional
     const canChangePeriod = canModifyMondayPeriod();
@@ -458,7 +484,7 @@ window.renderAdminWorkspace = function () {
     }
     document.getElementById("admTotalMondaysBadge").textContent = `${mondays.length} Kolom Senin`;
 
-    // 1. Matriks Kontrol Pelunasan Kas Siswa (Header Tanggal Vertikal Rapi)
+    // 1. Matriks Kontrol Pelunasan Kas Siswa (Header Tanggal Vertikal + Batch Save)
     const admHead = document.getElementById("admIuranMatrixHead");
     const admBody = document.getElementById("admIuranMatrixBody");
     const admSearch = (document.getElementById("admIuranSearchInput")?.value || "").toLowerCase();
@@ -503,13 +529,17 @@ window.renderAdminWorkspace = function () {
                             ${mondays
                                 .map((dateStr) => {
                                     const paid = Boolean(stu.paidDates[dateStr]);
+                                    const isPending = Object.prototype.hasOwnProperty.call(
+                                        portalState.pendingIuranChanges || {},
+                                        `${stu.id}_${dateStr}`
+                                    );
                                     return `
                                         <td class="p-1 border-r-2 border-neo-ink text-center">
                                             <button
                                                 type="button"
                                                 onclick="toggleStudentMondayDate(${stu.id}, '${dateStr}')"
                                                 title="Senin, ${dateStr}"
-                                                class="w-full py-1 px-1 rounded border border-neo-ink font-mono text-[10px] font-extrabold ${paid ? "bg-neo-lime text-neo-ink" : "bg-rose-200 text-rose-900"}"
+                                                class="w-full py-1 px-1 rounded border ${isPending ? "border-2 border-neo-violet ring-2 ring-neo-yellow" : "border-neo-ink"} font-mono text-[10px] font-extrabold ${paid ? "bg-neo-lime text-neo-ink" : "bg-rose-200 text-rose-900"}"
                                             >
                                                 ${paid ? "✓" : "✕"}
                                             </button>
@@ -589,7 +619,7 @@ window.renderAdminWorkspace = function () {
                 .join("");
     }
 
-    // 4. Pengumuman Berfoto & Moderasi Papan Tempel / NGL 24 Jam
+    // 4. Pengumuman Berfoto, Link WA & Moderasi Papan Tempel / NGL 24 Jam
     const admInfoBox = document.getElementById("admInfoListContainer");
     if (admInfoBox) {
         admInfoBox.innerHTML = appData.announcements.length === 0
@@ -603,6 +633,7 @@ window.renderAdminWorkspace = function () {
                             <div class="min-w-0">
                                 <div class="flex flex-wrap items-center gap-1.5">
                                     <span class="neo-badge bg-neo-yellow text-neo-ink text-[10px]">${a.category} • ${a.deadline}</span>
+                                    ${a.waLink ? `<span class="neo-badge bg-neo-lime text-neo-ink text-[9px]"><i class="fa-brands fa-whatsapp"></i> Link WA</span>` : ""}
                                     ${a.expireAt ? `<span class="font-mono text-[9px] surface-card border border-neo-ink px-1.5 py-0.5 rounded text-rose-500">Hapus Foto: ${a.expireAt.replace("T", " ")}</span>` : ""}
                                 </div>
                                 <h4 class="font-display font-extrabold text-sm mt-1 truncate">${a.title}</h4>
@@ -830,7 +861,7 @@ window.renderAdminWorkspace = function () {
 };
 
 // ============================================================================
-// 4. MODUL 1 & 2: KEUANGAN KAS & ABSENSI DIGITAL (DENGAN HAPUS PILIHAN ✕)
+// 4. MODUL 1 & 2: KEUANGAN KAS (BATCH SAVE ANTI-LEMOT) & ABSENSI DIGITAL
 // ============================================================================
 
 window.handleQuickMondayRangeUpdate = async function (e) {
@@ -857,6 +888,10 @@ window.handleQuickMondayRangeUpdate = async function (e) {
     window.renderAdminWorkspace();
 };
 
+/**
+ * Ketika tombol tanggal Senin diklik di tabel Admin, perubahan langsung diterapkan di memori (0ms)
+ * dan ditampung dalam `pendingIuranChanges` agar tidak lemot saat mencentang banyak siswa sekaligus.
+ */
 window.toggleStudentMondayDate = async function (studentId, dateStr) {
     if (!canEditInCurrentView("keuangan")) {
         showToast("Perubahan status kas hanya dapat dilakukan di dalam Panel Admin!", "bg-neo-coral");
@@ -865,12 +900,59 @@ window.toggleStudentMondayDate = async function (studentId, dateStr) {
     const student = portalState.appData.students.find((s) => s.id === studentId);
     if (!student) return;
     if (!student.paidDates || typeof student.paidDates !== "object") student.paidDates = {};
-    student.paidDates[dateStr] = !student.paidDates[dateStr];
-    await saveToCloudDatabase();
+
+    if (!portalState.pendingIuranChanges) portalState.pendingIuranChanges = {};
+    const changeKey = `${studentId}_${dateStr}`;
+    const prevValue = Boolean(student.paidDates[dateStr]);
+
+    // Simpan nilai awal sebelum diedit agar bisa di-Batal (Discard)
+    if (!Object.prototype.hasOwnProperty.call(portalState.pendingIuranChanges, changeKey)) {
+        portalState.pendingIuranChanges[changeKey] = {
+            studentId,
+            dateStr,
+            originalPaid: prevValue
+        };
+    } else if (portalState.pendingIuranChanges[changeKey].originalPaid === !prevValue) {
+        // Jika dikembalikan ke nilai semula, hapus dari antrean perubahan
+        delete portalState.pendingIuranChanges[changeKey];
+    }
+
+    student.paidDates[dateStr] = !prevValue;
+
+    // Render ulang tampilan lokal secara instan tanpa menunggu jaringan
     window.renderAdminWorkspace();
+    window.renderIuranMatrix();
     if (portalState.selectedStudentIdForCard === studentId) {
         window.openStudentCardModal(studentId);
     }
+};
+
+window.commitBatchIuranChanges = async function () {
+    if (!canEditInCurrentView("keuangan")) return;
+    const count = Object.keys(portalState.pendingIuranChanges || {}).length;
+    portalState.pendingIuranChanges = {};
+    updateBatchIuranIndicatorUI();
+    await saveToCloudDatabase(
+        count > 0
+            ? `${count} perubahan pelunasan kas siswa berhasil disimpan sekaligus ke Firebase!`
+            : "Data pelunasan iuran kas berhasil disinkronkan ke Firebase!"
+    );
+    window.renderAdminWorkspace();
+};
+
+window.discardBatchIuranChanges = function () {
+    if (!canEditInCurrentView("keuangan")) return;
+    const pending = portalState.pendingIuranChanges || {};
+    Object.values(pending).forEach((item) => {
+        const stu = portalState.appData.students.find((s) => s.id === item.studentId);
+        if (stu && stu.paidDates) {
+            stu.paidDates[item.dateStr] = item.originalPaid;
+        }
+    });
+    portalState.pendingIuranChanges = {};
+    window.renderAdminWorkspace();
+    window.renderIuranMatrix();
+    showToast("Perubahan iuran yang belum disimpan telah dibatalkan.", "bg-neo-yellow");
 };
 
 window.markAllWeeksPaidCurrentStudent = async function () {
@@ -880,6 +962,7 @@ window.markAllWeeksPaidCurrentStudent = async function () {
     const mondays = getMondayDatesList();
     if (!student.paidDates) student.paidDates = {};
     mondays.forEach((d) => { student.paidDates[d] = true; });
+    portalState.pendingIuranChanges = {};
     await saveToCloudDatabase(`Seluruh tanggal Senin untuk ${student.name} ditandai LUNAS!`);
     window.renderAdminWorkspace();
     window.openStudentCardModal(student.id);
@@ -1264,7 +1347,7 @@ window.saveCurrentDayAttendance = async function () {
 };
 
 // ============================================================================
-// 5. MODUL 3, 4, 5, 6: MASTER ANGGOTA, TUGAS BERFOTO, JADWAL & ALBUM
+// 5. MODUL 3, 4, 5, 6: MASTER ANGGOTA, TUGAS + LINK WA, JADWAL & ALBUM
 // ============================================================================
 
 window.handleStudentPhotoUpload = function (e) {
@@ -1376,7 +1459,7 @@ window.deleteStudentInAdmin = async function (id) {
     window.renderAdminWorkspace();
 };
 
-// --- Tugas Berfoto + Auto-Expire Deadline & Moderasi Mading/NGL ---
+// --- Tugas Berfoto + Link Saluran WA + Auto-Expire Deadline ---
 window.handleInfoPhotoUpload = function (e) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -1397,13 +1480,9 @@ window.updateInfoPhotoPreview = function (url) {
         wrap.classList.remove("hidden");
     } else {
         img.removeAttribute("src");
-        wrapperHide(wrap);
+        wrap.classList.add("hidden");
     }
 };
-
-function wrapperHide(el) {
-    if (el) el.classList.add("hidden");
-}
 
 window.clearInfoPhotoInput = function () {
     const urlInput = document.getElementById("admInfoPhotoUrl");
@@ -1421,11 +1500,13 @@ window.handleAdminSaveInfo = async function (e) {
     const editId = document.getElementById("admInfoEditId").value;
     const photoUrl = (document.getElementById("admInfoPhotoUrl")?.value || "").trim();
     const expireAt = (document.getElementById("admInfoExpireAt")?.value || "").trim();
+    const waLink = (document.getElementById("admInfoWaLink")?.value || "").trim();
 
     const payload = {
         id: editId ? Number(editId) : Date.now(),
         category: document.getElementById("admInfoCat").value,
         deadline: document.getElementById("admInfoDeadline").value.trim(),
+        waLink,
         expireAt,
         photoUrl,
         photoExpired: false,
@@ -1453,6 +1534,8 @@ window.editAnnouncement = function (id) {
     document.getElementById("admInfoEditId").value = a.id;
     document.getElementById("admInfoCat").value = a.category;
     document.getElementById("admInfoDeadline").value = a.deadline;
+    const waEl = document.getElementById("admInfoWaLink");
+    if (waEl) waEl.value = a.waLink || "";
     const expEl = document.getElementById("admInfoExpireAt");
     if (expEl) expEl.value = a.expireAt || "";
     const pUrl = document.getElementById("admInfoPhotoUrl");
@@ -1467,12 +1550,14 @@ window.editAnnouncement = function (id) {
 window.resetInfoForm = function () {
     document.getElementById("admInfoEditId").value = "";
     document.getElementById("admInfoDeadline").value = "";
+    const waEl = document.getElementById("admInfoWaLink");
+    if (waEl) waEl.value = "";
     const expEl = document.getElementById("admInfoExpireAt");
     if (expEl) expEl.value = "";
     window.clearInfoPhotoInput();
     document.getElementById("admInfoTitle").value = "";
     document.getElementById("admInfoBody").value = "";
-    document.getElementById("admInfoFormTitle").textContent = "Buat Pengumuman / Tugas + Foto";
+    document.getElementById("admInfoFormTitle").textContent = "Buat Pengumuman / Tugas + Link WA";
     document.getElementById("btnCancelEditInfo").classList.add("hidden");
 };
 
@@ -2074,6 +2159,7 @@ window.handleStartNewSemester = async function () {
 
     appData.announcements = [];
     appData.attendance = {};
+    portalState.pendingIuranChanges = {};
 
     if (!keepSchedule) {
         appData.schedule = { Senin: [], Selasa: [], Rabu: [], Kamis: [], Jumat: [], Sabtu: [] };
@@ -2104,6 +2190,7 @@ window.restoreArchivedSemester = async function (archiveId) {
     appData.announcements = JSON.parse(JSON.stringify(arc.announcements || []));
     appData.attendance = JSON.parse(JSON.stringify(arc.attendance || {}));
     if (arc.schedule) appData.schedule = JSON.parse(JSON.stringify(arc.schedule));
+    portalState.pendingIuranChanges = {};
 
     await saveToCloudDatabase(`Data arsip "${arc.label}" berhasil dipulihkan menjadi semester aktif!`);
     window.renderAdminWorkspace();

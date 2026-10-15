@@ -128,6 +128,7 @@ export const portalState = {
     selectedAttendanceMonth: toLocalISOMonth(new Date()),
     selectedStudentIdForCard: null,
     lastAddedStickyId: null,
+    pendingIuranChanges: {}, // Penampung Batch Save Iuran Kas agar anti-lemot
     isDarkMode: false,
     isApplyingRemoteUpdate: false
 };
@@ -149,7 +150,6 @@ let secretTapCount = 0;
 let secretTapTimer = null;
 let bidirectionalObserver = null;
 
-// Pastikan style pendukung teks tanggal vertikal & animasi scroll dua arah tersedia
 function injectSupportingUtilities() {
     if (document.getElementById("medivanceDynamicStyles")) return;
     const styleEl = document.createElement("style");
@@ -347,6 +347,7 @@ export async function cleanExpiredTaskPhotos(manualNotify = false) {
 }
 
 window.cleanExpiredTaskPhotos = cleanExpiredTaskPhotos;
+window.cleanExpiredAssetsNow = cleanExpiredTaskPhotos;
 
 // ============================================================================
 // MODE GELAP (DARK MODE) & NAVIGASI WORKSPACE
@@ -584,7 +585,7 @@ function restartHeroSlideshowTimer() {
             heroSlideIndex = (heroSlideIndex + 1) % slides.length;
             renderHeroSlideshowUI();
         }
-    }, 60000); // Berganti otomatis setiap 1 menit (60.000 ms)
+    }, 60000); // Berganti otomatis setiap 1 menit
 }
 
 function startLoopingTypewriter() {
@@ -1818,7 +1819,7 @@ window.renderLedgerTable = function () {
 };
 
 // ============================================================================
-// ABSENSI PUBLIK (HARIAN, MINGGUAN, BULANAN), INFO, JADWAL, ALBUM & SISWA
+// ABSENSI PUBLIK (HARIAN, MINGGUAN, BULANAN), INFO + LINK WA, JADWAL & ALBUM
 // ============================================================================
 
 const STATUS_BADGE_MAP = {
@@ -2034,7 +2035,7 @@ export function renderPublicAttendanceView() {
 
 window.renderPublicAttendanceView = renderPublicAttendanceView;
 
-// --- Papan Informasi, Jadwal, Album & Direktori Siswa ---
+// --- Papan Informasi + Link WA MEDIVANCE INFO, Jadwal, Album & Direktori Siswa ---
 window.filterInfoCategory = function (cat) {
     portalState.activeInfoCategory = cat;
     ["ALL", "TUGAS", "PENTING", "EVENT", "KAS"].forEach((c) => {
@@ -2048,6 +2049,7 @@ export function renderInfoBoard() {
     const grid = document.getElementById("infoCardsGrid");
     const badge = document.getElementById("badgeInfoCount");
     const announcements = portalState.appData.announcements || [];
+    const globalWaUrl = (portalState.appData.config.waChannelUrl || "").trim();
     if (badge) badge.textContent = announcements.length;
     if (!grid) return;
 
@@ -2067,8 +2069,9 @@ export function renderInfoBoard() {
     };
 
     grid.innerHTML = items
-        .map(
-            (item) => `
+        .map((item) => {
+            const targetWaLink = (item.waLink || globalWaUrl || "").trim();
+            return `
             <article class="neo-card surface-card p-5 flex flex-col justify-between space-y-3 scroll-anim-card">
                 <div class="space-y-3">
                     <div class="flex items-center justify-between gap-2">
@@ -2091,14 +2094,25 @@ export function renderInfoBoard() {
                               ? `<div class="bg-neo-surface border border-dashed border-neo-ink/40 rounded-lg px-3 py-2 text-[11px] font-mono font-bold text-muted-adaptive"><i class="fa-solid fa-clock-rotate-left mr-1"></i> Lampiran foto tugas telah dihapus otomatis karena melewati batas waktu deadline.</div>`
                               : ""
                     }
+                    ${
+                        targetWaLink.length > 5
+                            ? `
+                        <div class="pt-1">
+                            <a href="${targetWaLink}" target="_blank" rel="noopener noreferrer" class="neo-btn bg-neo-lime text-neo-ink w-full py-2 px-3 text-xs">
+                                <i class="fa-brands fa-whatsapp text-sm"></i> Lihat Lanjut di Saluran WA MEDIVANCE INFO
+                            </a>
+                        </div>
+                    `
+                            : ""
+                    }
                 </div>
                 <div class="pt-2.5 border-t-2 border-neo-ink flex items-center justify-between text-xs font-bold text-muted-adaptive">
                     <span><i class="fa-solid fa-user-pen mr-1"></i> ${item.author}</span>
                     ${item.expireAt && item.photoUrl ? `<span class="font-mono text-[10px] text-rose-500">Foto Aktif s/d: ${item.expireAt.replace("T", " ")}</span>` : ""}
                 </div>
             </article>
-        `
-        )
+        `;
+        })
         .join("");
 }
 
@@ -2364,7 +2378,7 @@ window.renderStudentDirectory = function () {
 };
 
 // ============================================================================
-// EKSPOR LAPORAN SHEET RESMI (.XLS & .CSV) DENGAN KOP 2 LOGO (SEKOLAH & KELAS)
+// EKSPOR LAPORAN SHEET RESMI (.XLS & .CSV) DENGAN KOP TERANG 2 LOGO BESAR
 // ============================================================================
 
 window.downloadOfficialExcelSheet = function () {
@@ -2383,12 +2397,12 @@ window.downloadOfficialExcelSheet = function () {
     const totalColumns = mondays.length + 7;
 
     const schoolLogoHtml = cfg.schoolLogoUrl
-        ? `<img src="${cfg.schoolLogoUrl}" width="70" height="70" style="object-fit:contain;">`
-        : `<div style="font-weight:bold;font-size:10pt;color:#FFE600;">[${cfg.schoolName || "SEKOLAH"}]</div>`;
+        ? `<img src="${cfg.schoolLogoUrl}" width="85" height="85" style="object-fit:contain;">`
+        : `<div style="font-weight:bold;font-size:11pt;color:#111111;">[${cfg.schoolName || "SEKOLAH"}]</div>`;
 
     const classLogoHtml = cfg.classLogoUrl || cfg.websiteLogoUrl
-        ? `<img src="${cfg.classLogoUrl || cfg.websiteLogoUrl}" width="70" height="70" style="object-fit:contain;">`
-        : `<div style="font-weight:bold;font-size:12pt;color:#00F5D4;">[${cfg.classCode || "MDV"}]</div>`;
+        ? `<img src="${cfg.classLogoUrl || cfg.websiteLogoUrl}" width="85" height="85" style="object-fit:contain;">`
+        : `<div style="font-weight:bold;font-size:12pt;color:#111111;">[${cfg.classCode || "MDV"}]</div>`;
 
     const studentRowsHtml = appData.students
         .map((s) => {
@@ -2446,16 +2460,17 @@ window.downloadOfficialExcelSheet = function () {
         <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
         <head><meta charset="UTF-8"></head>
         <body style="font-family:Arial,sans-serif;font-size:11pt;">
+            <!-- KOP TERANG ESTETIK DENGAN 2 LOGO BESAR (SEKOLAH KIRI & KELAS KANAN) -->
             <table style="border-collapse:collapse;width:100%;margin-bottom:18px;">
                 <tr>
-                    <td colspan="2" rowspan="2" style="background-color:#111111;color:#FFFFFF;text-align:center;vertical-align:middle;padding:10px;border:2px solid #111111;">
+                    <td colspan="2" rowspan="2" style="background-color:#FFFDF7;color:#111111;text-align:center;vertical-align:middle;padding:12px;border:2px solid #111111;">
                         ${schoolLogoHtml}
                     </td>
-                    <td colspan="${centerColSpan}" style="background-color:#111111;color:#FFE600;font-size:15pt;font-weight:bold;padding:10px;text-align:center;border-top:2px solid #111111;">
+                    <td colspan="${centerColSpan}" style="background-color:#FFFDF7;color:#111111;font-size:16pt;font-weight:bold;padding:12px;text-align:center;border-top:2px solid #111111;">
                         ${(cfg.schoolName || "SMA NEGERI 5 AMBON").toUpperCase()}<br>
-                        <span style="font-size:13pt;color:#FFFFFF;">LAPORAN RESMI BUKU KAS & IURAN KELAS ${(cfg.className || "MEDIVANCE").toUpperCase()}</span>
+                        <span style="font-size:13pt;color:#111111;">LAPORAN RESMI BUKU KAS & IURAN KELAS ${(cfg.className || "MEDIVANCE").toUpperCase()}</span>
                     </td>
-                    <td colspan="2" rowspan="2" style="background-color:#111111;color:#FFFFFF;text-align:center;vertical-align:middle;padding:10px;border:2px solid #111111;">
+                    <td colspan="2" rowspan="2" style="background-color:#FFFDF7;color:#111111;text-align:center;vertical-align:middle;padding:12px;border:2px solid #111111;">
                         ${classLogoHtml}
                     </td>
                 </tr>
@@ -2542,7 +2557,7 @@ window.downloadOfficialExcelSheet = function () {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-    showToast("File Sheet Resmi (.xls) dengan Kop 2 Logo berhasil diunduh!", "bg-neo-yellow");
+    showToast("File Sheet Resmi (.xls) Kop Terang 2 Logo Besar berhasil diunduh!", "bg-neo-yellow");
 };
 
 window.exportIuranCSV = function () {
@@ -2661,7 +2676,7 @@ window.downloadAttendanceExcelSheet = function () {
         <body style="font-family:Arial,sans-serif;font-size:11pt;">
             <table style="border-collapse:collapse;width:100%;margin-bottom:16px;">
                 <tr>
-                    <td colspan="${totalCols}" style="background-color:#111111;color:#FFE600;font-size:15pt;font-weight:bold;padding:12px;text-align:center;border:2px solid #111;">
+                    <td colspan="${totalCols}" style="background-color:#FFFDF7;color:#111111;font-size:15pt;font-weight:bold;padding:12px;text-align:center;border:2px solid #111;">
                         ${(cfg.schoolName || "SMA NEGERI 5 AMBON").toUpperCase()} — REKAPITULASI ABSENSI DIGITAL KELAS ${cfg.className || "MEDIVANCE"} (${cfg.semesterName || "Semester Ganjil"} TA ${cfg.academicYear || "2026/2027"})
                     </td>
                 </tr>
