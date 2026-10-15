@@ -93,8 +93,9 @@ body {
 }
 
 .neo-btn:disabled {
-    opacity: 0.65;
+    opacity: 0.55;
     cursor: not-allowed;
+    transform: none !important;
 }
 
 /* Neo-Brutalist Inputs, Selects & Textareas */
@@ -118,6 +119,12 @@ body {
     transform: translate(-1px, -1px);
     box-shadow: 4px 4px 0px 0px var(--shadow-color);
     border-color: #00BBF9;
+}
+
+.neo-input:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    background-color: var(--surface-bg);
 }
 
 /* Badges */
@@ -146,6 +153,45 @@ body {
     box-shadow: 2px 2px 0px 0px #111111;
 }
 
+/* Sel Kalender Mini di Footer */
+.mini-cal-cell {
+    height: 1.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.35rem;
+    border: 1.5px solid transparent;
+    transition: transform 0.12s ease;
+}
+
+.mini-cal-cell.is-holiday {
+    background-color: #FF5E5B !important;
+    color: #FFFFFF !important;
+    border-color: #111111 !important;
+    font-weight: 800;
+}
+
+.mini-cal-cell.is-weekend:not(.is-holiday) {
+    background-color: rgba(255, 94, 91, 0.18);
+    color: #E11D48;
+    border-color: rgba(225, 29, 72, 0.35);
+    font-weight: 800;
+}
+
+html.dark .mini-cal-cell.is-weekend:not(.is-holiday) {
+    background-color: rgba(255, 94, 91, 0.25);
+    color: #FDA4AF;
+}
+
+.mini-cal-cell.is-today {
+    ring: 2px solid #111111;
+    background-color: #FFE600 !important;
+    color: #111111 !important;
+    border: 2px solid #111111 !important;
+    box-shadow: 1.5px 1.5px 0px 0px #111111;
+    font-weight: 800;
+}
+
 /* ==========================================================================
    HARMONISASI MODE GELAP (DARK MODE) MENYELURUH & SELARAS
    ========================================================================== */
@@ -172,7 +218,7 @@ html.dark .lg\:col-span-5.bg-white {
     border-color: var(--border-color) !important;
 }
 
-/* Kartu Aksen Warna (Mint, Sky, Pink, Orange, Yellow, Lime) tetap cerah & teks gelap tajam */
+/* Kartu Aksen Warna tetap cerah & teks gelap tajam */
 html.dark .kpi-accent-card,
 html.dark .neo-card.bg-neo-yellow,
 html.dark .neo-card.bg-neo-lime {
@@ -244,12 +290,13 @@ html.dark .neo-table th {
 
 html.dark input[type="date"]::-webkit-calendar-picker-indicator,
 html.dark input[type="time"]::-webkit-calendar-picker-indicator,
-html.dark input[type="month"]::-webkit-calendar-picker-indicator {
+html.dark input[type="month"]::-webkit-calendar-picker-indicator,
+html.dark input[type="datetime-local"]::-webkit-calendar-picker-indicator {
     filter: invert(1);
 }
 
 /* ==========================================================================
-   ANIMASI MARQUEE, HERO & PERBAIKAN BUG REVEAL DASHBOARD (ANTI-BLANK)
+   ANIMASI MARQUEE, HERO & REVEAL DASHBOARD (ANTI-BLANK)
    ========================================================================== */
 
 @keyframes marquee {
@@ -291,9 +338,6 @@ html.dark input[type="month"]::-webkit-calendar-picker-indicator {
     animation: floatSlow 4.5s ease-in-out infinite;
 }
 
-/* PERBAIKAN BUG DASHBOARD HILANG SAAT AWAL BUKA:
-   Menggunakan CSS Keyframe otomatis sehingga elemen dijamin 100% muncul
-   tanpa pernah tertahan pada opacity: 0 */
 @keyframes neoRevealUp {
     0% {
         opacity: 0;
