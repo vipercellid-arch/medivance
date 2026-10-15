@@ -4054,4 +4054,300 @@ window.downloadOfficialExcelSheet = function () {
                     ${statuses
                         .map(
                             (st) => `
-                        <td style="border:1px solid #111;padding:6px;text-align:
+                        <td style="border:1px solid #111;padding:6px;text-align:center;font-weight:bold;background-color:${st ? "#D9F99D" : "#FECDD3"};color:${st ? "#14532D" : "#881337"};">
+                            ${st ? "LUNAS" : "BELUM"}
+                        </td>
+                    `
+                        )
+                        .join("")}
+                    <td style="border:1px solid #111;padding:6px;text-align:right;font-weight:bold;color:#047857;">${formatRupiah(paidRp)}</td>
+                    <td style="border:1px solid #111;padding:6px;text-align:right;font-weight:bold;color:${unpaidRp > 0 ? "#BE123C" : "#64748B"};">${formatRupiah(unpaidRp)}</td>
+                </tr>
+            `;
+        })
+        .join("");
+
+    const txRowsHtml = appData.transactions
+        .map(
+            (t, i) => `
+            <tr>
+                <td style="border:1px solid #111;padding:6px;text-align:center;">${i + 1}</td>
+                <td style="border:1px solid #111;padding:6px;text-align:center;">${t.date}</td>
+                <td style="border:1px solid #111;padding:6px;text-align:center;font-weight:bold;background-color:${t.type === "MASUK" ? "#D9F99D" : "#FEF08A"};">${t.type}</td>
+                <td style="border:1px solid #111;padding:6px;">${t.category}</td>
+                <td style="border:1px solid #111;padding:6px;">${t.desc}</td>
+                <td style="border:1px solid #111;padding:6px;">${t.pic}</td>
+                <td style="border:1px solid #111;padding:6px;text-align:right;font-weight:bold;color:${t.type === "MASUK" ? "#047857" : "#BE123C"};">
+                    ${t.type === "MASUK" ? "+" : "-"}${formatRupiah(t.amount)}
+                </td>
+            </tr>
+        `
+        )
+        .join("");
+
+    const excelHtml = `
+        <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+        <head><meta charset="UTF-8"></head>
+        <body style="font-family:Arial,sans-serif;font-size:11pt;">
+            <table style="border-collapse:collapse;width:100%;margin-bottom:18px;">
+                <tr>
+                    <td colspan="${totalColumns}" style="background-color:#111111;color:#FFE600;font-size:16pt;font-weight:bold;padding:12px;text-align:center;border:2px solid #111111;">
+                        LAPORAN RESMI REKAPITULASI IURAN & BUKU KAS KELAS ${cfg.className || "MEDIVANCE"}
+                    </td>
+                </tr>
+                <tr>
+                    <td colspan="${totalColumns}" style="background-color:#FFE600;color:#111111;font-size:11pt;font-weight:bold;padding:6px;text-align:center;border:2px solid #111111;">
+                        MOTTO KELAS: "${cfg.classMotto || "Together We Grow, Together We Heal"}" • ${(cfg.semesterName || "SEMESTER GANJIL").toUpperCase()}
+                    </td>
+                </tr>
+                <tr>
+                    <td colspan="3" style="padding:6px;border:1px solid #111;font-weight:bold;background-color:#F4EFE6;">Nama Kelas</td>
+                    <td colspan="${Math.max(2, totalColumns - 3)}" style="padding:6px;border:1px solid #111;">${cfg.className} (${cfg.classCode})</td>
+                </tr>
+                <tr>
+                    <td colspan="3" style="padding:6px;border:1px solid #111;font-weight:bold;background-color:#F4EFE6;">Wali Kelas</td>
+                    <td colspan="${Math.max(2, totalColumns - 3)}" style="padding:6px;border:1px solid #111;">${cfg.waliKelas || "-"} (${cfg.waliTitle || "Wali Kelas"})</td>
+                </tr>
+                <tr>
+                    <td colspan="3" style="padding:6px;border:1px solid #111;font-weight:bold;background-color:#F4EFE6;">Periode & Tahun Ajaran</td>
+                    <td colspan="${Math.max(2, totalColumns - 3)}" style="padding:6px;border:1px solid #111;">${cfg.semesterName || "Semester Ganjil"} • TA ${cfg.academicYear} • Periode Senin: ${mondays[0]} s/d ${mondays[mondays.length - 1]} (${mondays.length} Pekan @ ${formatRupiah(stats.fee)})</td>
+                </tr>
+                <tr>
+                    <td colspan="3" style="padding:6px;border:1px solid #111;font-weight:bold;background-color:#F4EFE6;">Ringkasan Saldo Kas Aktif</td>
+                    <td colspan="${Math.max(2, totalColumns - 3)}" style="padding:6px;border:1px solid #111;font-weight:bold;background-color:#CCFBF1;">
+                        SALDO AKTIF: ${formatRupiah(stats.currentBalance)} &nbsp;|&nbsp; TOTAL MASUK: ${formatRupiah(stats.totalIncome)} &nbsp;|&nbsp; TOTAL KELUAR: ${formatRupiah(stats.totalExpense)} &nbsp;|&nbsp; KEPATUHAN: ${stats.complianceRatio}%
+                    </td>
+                </tr>
+                <tr>
+                    <td colspan="3" style="padding:6px;border:1px solid #111;font-weight:bold;background-color:#F4EFE6;">Waktu Cetak / Unduh</td>
+                    <td colspan="${Math.max(2, totalColumns - 3)}" style="padding:6px;border:1px solid #111;">${nowStr}</td>
+                </tr>
+            </table>
+
+            <h3 style="margin-bottom:6px;font-size:13pt;">I. TABEL PELUNASAN IURAN WAJIB HARI SENIN</h3>
+            <table style="border-collapse:collapse;width:100%;margin-bottom:24px;">
+                <thead>
+                    <tr style="background-color:#111111;color:#FFFFFF;font-weight:bold;">
+                        <th style="border:1px solid #111;padding:8px;">No. Absen</th>
+                        <th style="border:1px solid #111;padding:8px;">Nama Lengkap Anggota</th>
+                        <th style="border:1px solid #111;padding:8px;">L/P</th>
+                        <th style="border:1px solid #111;padding:8px;">Jabatan</th>
+                        <th style="border:1px solid #111;padding:8px;">Piket</th>
+                        ${mondays.map((d) => `<th style="border:1px solid #111;padding:8px;text-align:center;">Senin<br>${formatShortMondayLabel(d)}</th>`).join("")}
+                        <th style="border:1px solid #111;padding:8px;text-align:right;">Total Terbayar</th>
+                        <th style="border:1px solid #111;padding:8px;text-align:right;">Tunggakan</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${studentRowsHtml || `<tr><td colspan="${totalColumns}" style="padding:10px;text-align:center;border:1px solid #111;">Belum ada data anggota.</td></tr>`}
+                </tbody>
+            </table>
+
+            <h3 style="margin-bottom:6px;font-size:13pt;">II. BUKU MUTASI KAS UMUM (PEMASUKAN & PENGELUARAN)</h3>
+            <table style="border-collapse:collapse;width:100%;">
+                <thead>
+                    <tr style="background-color:#111111;color:#FFFFFF;font-weight:bold;">
+                        <th style="border:1px solid #111;padding:8px;">No</th>
+                        <th style="border:1px solid #111;padding:8px;">Tanggal</th>
+                        <th style="border:1px solid #111;padding:8px;">Jenis</th>
+                        <th style="border:1px solid #111;padding:8px;">Kategori</th>
+                        <th style="border:1px solid #111;padding:8px;">Rincian Keperluan</th>
+                        <th style="border:1px solid #111;padding:8px;">Penanggung Jawab</th>
+                        <th style="border:1px solid #111;padding:8px;text-align:right;">Nominal</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td style="border:1px solid #111;padding:6px;text-align:center;font-weight:bold;">-</td>
+                        <td style="border:1px solid #111;padding:6px;text-align:center;">AKUMULASI</td>
+                        <td style="border:1px solid #111;padding:6px;text-align:center;font-weight:bold;background-color:#D9F99D;">MASUK</td>
+                        <td style="border:1px solid #111;padding:6px;">Iuran Hari Senin</td>
+                        <td style="border:1px solid #111;padding:6px;font-weight:bold;">Total Akumulasi Iuran Kas Mingguan Anggota (${stats.totalPaidWeeks} Senin Lunas)</td>
+                        <td style="border:1px solid #111;padding:6px;">Bendahara Kelas</td>
+                        <td style="border:1px solid #111;padding:6px;text-align:right;font-weight:bold;color:#047857;">+${formatRupiah(stats.totalIuranPaid)}</td>
+                    </tr>
+                    ${txRowsHtml}
+                </tbody>
+            </table>
+        </body>
+        </html>
+    `;
+
+    const blob = new Blob(["\ufeff", excelHtml], { type: "application/vnd.ms-excel;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `Laporan_Resmi_Kas_${(cfg.className || "MEDIVANCE").replace(/\s+/g, "_")}.xls`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showToast("File Sheet Resmi (.xls) berhasil diunduh!", "bg-neo-yellow");
+};
+
+window.exportIuranCSV = function () {
+    const cfg = appData.config;
+    const stats = calculateFinancialSummary();
+    const mondays = stats.mondayDates;
+    const nowStr = new Date().toLocaleDateString("id-ID");
+
+    const topHeaderRows = [
+        `"LAPORAN RESMI REKAPITULASI IURAN KAS KELAS ${(cfg.className || "MEDIVANCE").toUpperCase()}"`,
+        `"Motto Kelas:","${cfg.classMotto || "Together We Grow, Together We Heal"}"`,
+        `"Wali Kelas:","${cfg.waliKelas || "-"}","Periode:","${cfg.semesterName || "Semester Ganjil"} TA ${cfg.academicYear || "-"}"`,
+        `"Periode Kas:","${mondays[0]} s/d ${mondays[mondays.length - 1]} (${mondays.length} Hari Senin)","Tarif / Senin:","${formatRupiah(stats.fee)}"`,
+        `"Saldo Kas Aktif:","${formatRupiah(stats.currentBalance)}","Total Iuran Masuk:","${formatRupiah(stats.totalIuranPaid)}","Tanggal Unduh:","${nowStr}"`,
+        `""`
+    ];
+
+    const headers = ["No_Absen", "Nama_Anggota", "L/P", "Jabatan", "Piket", ...mondays.map((d) => `Senin_${d}`), "Total_Bayar", "Tunggakan"];
+
+    const rows = appData.students.map((s) => {
+        ensureStudentPaidDatesMigrated(s, mondays);
+        const statuses = mondays.map((d) => (s.paidDates[d] ? "LUNAS" : "BELUM"));
+        const paidCount = statuses.filter((st) => st === "LUNAS").length;
+        return [
+            s.absen,
+            `"${s.name}"`,
+            `"${s.gender || "L"}"`,
+            `"${s.role}"`,
+            `"${s.piket}"`,
+            ...statuses,
+            paidCount * stats.fee,
+            (mondays.length - paidCount) * stats.fee
+        ].join(",");
+    });
+
+    const csvBody = [...topHeaderRows, headers.join(","), ...rows].join("\n");
+    const blob = new Blob(["\ufeff", csvBody], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `Sheet_Iuran_${(cfg.className || "MEDIVANCE").replace(/\s+/g, "_")}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showToast("File CSV Rekap Iuran berhasil diunduh!", "bg-neo-mint");
+};
+
+window.exportMutasiCSV = function () {
+    const cfg = appData.config;
+    const stats = calculateFinancialSummary();
+    const nowStr = new Date().toLocaleDateString("id-ID");
+
+    const topHeaderRows = [
+        `"BUKU MUTASI KAS RESMI KELAS ${(cfg.className || "MEDIVANCE").toUpperCase()}"`,
+        `"Motto Kelas:","${cfg.classMotto || "Together We Grow, Together We Heal"}"`,
+        `"Wali Kelas:","${cfg.waliKelas || "-"}","Periode:","${cfg.semesterName || "Semester Ganjil"} TA ${cfg.academicYear || "-"}"`,
+        `"Saldo Aktif:","${formatRupiah(stats.currentBalance)}","Total Pemasukan:","${formatRupiah(stats.totalIncome)}","Total Pengeluaran:","${formatRupiah(stats.totalExpense)}","Tanggal Unduh:","${nowStr}"`,
+        `""`
+    ];
+
+    const headers = ["Tanggal", "Jenis", "Kategori", "Keterangan", "Penanggung_Jawab", "Nominal"];
+    const rows = [
+        `"AKUMULASI","MASUK","Iuran Hari Senin","Akumulasi Iuran Mingguan Anggota (${stats.totalPaidWeeks} Senin Lunas)","Bendahara Kelas",${stats.totalIuranPaid}`,
+        ...appData.transactions.map((t) =>
+            [t.date, t.type, `"${t.category}"`, `"${t.desc}"`, `"${t.pic}"`, t.amount].join(",")
+        )
+    ];
+
+    const csvBody = [...topHeaderRows, headers.join(","), ...rows].join("\n");
+    const blob = new Blob(["\ufeff", csvBody], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `Buku_Kas_${(cfg.className || "MEDIVANCE").replace(/\s+/g, "_")}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showToast("File CSV Buku Kas berhasil diunduh!", "bg-neo-mint");
+};
+
+// ============================================================================
+// RENDER KESELURUHAN & INISIALISASI APLIKASI (ANTI-CRASH & AUTO-DASHBOARD)
+// ============================================================================
+
+function renderAllViews() {
+    try { renderHeaderAndHeroIdentity(); } catch (e) { console.error(e); }
+    try { renderDashboard(); } catch (e) { console.error(e); }
+    try { renderIuranMatrix(); } catch (e) { console.error(e); }
+    try { renderLedgerTable(); } catch (e) { console.error(e); }
+    try { renderPublicAttendanceView(); } catch (e) { console.error(e); }
+    try { renderStickyNotesWall(); } catch (e) { console.error(e); }
+    try { renderInfoBoard(); } catch (e) { console.error(e); }
+    try { renderScheduleAndPiket(); } catch (e) { console.error(e); }
+    try { renderAlbumGallery(); } catch (e) { console.error(e); }
+    try { renderStudentDirectory(); } catch (e) { console.error(e); }
+
+    if (activeWorkspace === "admin" && currentAdmin) {
+        try { renderAdminWorkspace(); } catch (e) { console.error(e); }
+    }
+}
+
+function updateClock() {
+    const el = document.getElementById("liveClockDisplay");
+    if (!el) return;
+    const now = new Date();
+    el.textContent =
+        now.toLocaleDateString("id-ID", {
+            weekday: "short",
+            day: "2-digit",
+            month: "short",
+            year: "numeric"
+        }) +
+        " • " +
+        now.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+}
+
+window.addEventListener("DOMContentLoaded", () => {
+    // 1. Terapkan preferensi tema Gelap/Terang
+    try {
+        const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+        if (savedTheme === "1") applyThemeState(true);
+    } catch (e) {}
+
+    // 2. Set tanggal & bulan lokal hari ini pada seluruh input tanggal
+    const todayIso = toLocalISODate(new Date());
+    const monthIso = toLocalISOMonth(new Date());
+    ["admTxDate", "admAlbumDate", "admAttendanceDateInput", "admAttendanceWeekInput", "publicAttendanceDateInput", "publicAttendanceWeekInput"].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.value = todayIso;
+    });
+    ["admAttendanceMonthInput", "publicAttendanceMonthInput"].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.value = monthIso;
+    });
+
+    // 3. Pastikan Beranda Utama (#view-dashboard) langsung tampil penuh saat awal buka web
+    activeWorkspace = "user";
+    activeTabId = "dashboard";
+    syncScheduleTimeRange();
+    updateClock();
+    setInterval(updateClock, 30000);
+    updateWorkspaceVisibility();
+
+    // 4. Hubungkan secara real-time ke Cloud Firebase (Membaca data lama terlebih dahulu tanpa menimpanya)
+    initCloudSynchronization({
+        onStateReceived: (incomingState, updatedAt) => {
+            if (updatedAt && updatedAt === lastAppliedTimestamp) return;
+            if (updatedAt) lastAppliedTimestamp = updatedAt;
+
+            isApplyingRemoteUpdate = true;
+            appData = mergeWithDefaults(incomingState);
+            renderAllViews();
+            isApplyingRemoteUpdate = false;
+        },
+        onAdminsReceived: (adminList) => {
+            externalFirebaseAdmins = mergeAdminArrays(externalFirebaseAdmins, adminList);
+            if (activeWorkspace === "admin") renderAdminWorkspace();
+        },
+        onConnectionStatus: (isOnline) => {
+            const pubBadge = document.getElementById("publicCloudBadge");
+            if (pubBadge && isOnline) {
+                pubBadge.classList.remove("hidden");
+            }
+        }
+    });
+});
