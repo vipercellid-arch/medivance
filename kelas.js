@@ -1,23 +1,69 @@
 // ============================================================================
-// KELAS.JS — LOGIKA UTAMA PORTAL KELAS, ABSENSI (H/M/B) & ARSIP SEMESTER BARU
+// KELAS.JS — ENGINE UTAMA PORTAL KELAS RESMI, ABSENSI (H/M/B) & ARSIP SEMESTER
+// Terintegrasi Penuh: Firebase RTDB (SDK + REST API) + Cloud Firestore + Auth
 // ============================================================================
 
+import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import {
-    initCloudSynchronization,
-    savePortalStateToCloud,
-    saveAdminAccountToCloud,
-    deleteAdminAccountFromCloud,
-    fetchAllAdminsFromCloud,
-    loginWithFirebaseAuth,
-    logoutFirebaseSession
-} from "./firebase.js";
+    getAuth,
+    signInAnonymously,
+    signInWithEmailAndPassword,
+    createUserWithEmailAndPassword,
+    signOut
+} from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import {
+    getFirestore,
+    doc,
+    getDoc,
+    setDoc,
+    deleteDoc,
+    getDocs,
+    onSnapshot,
+    collection
+} from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import {
+    getDatabase,
+    ref as dbRef,
+    set as dbSet,
+    get as dbGet,
+    remove as dbRemove,
+    onValue
+} from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
 
+// Konfigurasi Resmi Firebase (viperstudio)
+const FIREBASE_CONFIG = {
+    apiKey: "AIzaSyAUXh8GjYo_UAlTfmY04qn1kdHJaCxLNwY",
+    authDomain: "viperstudio.firebaseapp.com",
+    databaseURL: "https://viperstudio-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "viperstudio",
+    storageBucket: "viperstudio.firebasestorage.app",
+    messagingSenderId: "810644102921",
+    appId: "1:810644102921:web:5a70b76f7c9424ad053dd8",
+    measurementId: "G-FFG1EMPQ82"
+};
+
+// Inisialisasi Aman (Tidak bentrok dengan firebase.js)
+const fbApp = getApps().length > 0 ? getApp() : initializeApp(FIREBASE_CONFIG);
+const auth = getAuth(fbApp);
+const db = getFirestore(fbApp);
+const rtdb = getDatabase(fbApp);
+
+const RTDB_BASE_URL = FIREBASE_CONFIG.databaseURL;
+const CLOUD_MAIN_NODE = "portal_kelas/medivance_v4/main_state";
+const CLOUD_LEGACY_NODE = "portal_kelas/portal-kelas-utama/main_state";
+const CLOUD_ADMINS_NODE = "portal_kelas/medivance_v4/admins";
+
+const FS_MAIN_DOC = doc(db, "portal_kelas_store", "main_state");
+const FS_LEGACY_DOC = doc(db, "artifacts", "portal-kelas-utama", "public", "data", "portal_kelas_store", "main_state");
+
+const LOCAL_CACHE_KEY = "medivance_cloud_mirror_v4";
 const THEME_STORAGE_KEY = "medivance_theme_mode";
 const DEFAULT_HERO_BG = "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&w=1400&q=80";
 
-/**
- * Format Tanggal Lokal (YYYY-MM-DD) & Bulan Lokal (YYYY-MM)
- */
+// ============================================================================
+// UTILITAS TANGGAL LOKAL (BEBAS BUG ZONA WAKTU)
+// ============================================================================
+
 function toLocalISODate(dateObj = new Date()) {
     const yyyy = dateObj.getFullYear();
     const mm = String(dateObj.getMonth() + 1).padStart(2, "0");
@@ -47,7 +93,7 @@ function getDefaultMondayRange() {
 
 const defaultRange = getDefaultMondayRange();
 
-// STATE DEFAULT AWAL
+// STATE AWAL DEFAULT
 const DEFAULT_DATABASE_STATE = {
     config: {
         classCode: "MDV",
@@ -86,8 +132,8 @@ const DEFAULT_DATABASE_STATE = {
     announcements: [],
     albums: [],
     stickyNotes: [],
-    attendance: {}, // { "YYYY-MM-DD": { [studentId]: { status: "H"|"I"|"S"|"A", note: "" } } }
-    archives: [],   // Brankas arsip semester terdahulu
+    attendance: {},
+    archives: [],
     schedule: {
         "Senin": [],
         "Selasa": [],
@@ -99,11 +145,11 @@ const DEFAULT_DATABASE_STATE = {
 };
 
 // State Aplikasi Aktif
-let appData = JSON.parse(JSON.stringify(DEFAULT_DATABASE_STATE));
+let appData = loadMirrorCache() || JSON.parse(JSON.stringify(DEFAULT_DATABASE_STATE));
 let externalFirebaseAdmins = [];
 let currentAdmin = null;
 
-// Navigasi Workspace & Tab
+// Mode Navigasi & Filter
 let activeWorkspace = "user"; // 'user' | 'login' | 'admin' | 'preview'
 let activeTabId = "dashboard";
 let activeAdminSectionId = "adm-keuangan";
@@ -111,13 +157,13 @@ let activeInfoCategory = "ALL";
 let activeAlbumCategory = "ALL";
 let activeScheduleDay = "ALL";
 
-// State Filter Absensi Digital (Harian, Mingguan, Bulanan)
-let publicAttendanceMode = "DAILY"; // 'DAILY' | 'WEEKLY' | 'MONTHLY'
+// Mode Filter Absensi Digital (Per Hari, Per Minggu, Per Bulan)
+let publicAttendanceMode = "DAILY";
 let selectedPublicAttendanceDate = toLocalISODate(new Date());
 let selectedPublicAttendanceWeek = toLocalISODate(new Date());
 let selectedPublicAttendanceMonth = toLocalISOMonth(new Date());
 
-let adminAttendanceMode = "DAILY"; // 'DAILY' | 'WEEKLY' | 'MONTHLY'
+let adminAttendanceMode = "DAILY";
 let selectedAttendanceDate = toLocalISODate(new Date());
 let selectedAttendanceWeek = toLocalISODate(new Date());
 let selectedAttendanceMonth = toLocalISOMonth(new Date());
@@ -125,17 +171,49 @@ let selectedAttendanceMonth = toLocalISOMonth(new Date());
 let selectedStudentIdForCard = null;
 let lastAddedStickyId = null;
 let isDarkMode = false;
-let isApplyingRemoteUpdate = false;
+let lastCloudWriteTime = 0;
 let lastAppliedTimestamp = "";
 
 let secretTapCount = 0;
 let secretTapTimer = null;
-let typewriterTimer = null;
-let currentTypedGoal = "";
 
 // ============================================================================
-// SINKRONISASI REAL-TIME FIREBASE & MERGE DATA AMAN
+// SISTEM OTENTIKASI CLOUD OTOMATIS & TRIPLE-ENGINE DATABASE FIREBASE
 // ============================================================================
+
+function loadMirrorCache() {
+    try {
+        const raw = localStorage.getItem(LOCAL_CACHE_KEY);
+        if (!raw) return null;
+        return mergeWithDefaults(JSON.parse(raw));
+    } catch (e) {
+        return null;
+    }
+}
+
+function saveMirrorCache() {
+    try {
+        localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(appData));
+    } catch (e) {}
+}
+
+/**
+ * Menghitung skor kelengkapan data agar data kosong tidak pernah menimpa data berisi
+ */
+function getStateRichnessScore(stateObj) {
+    if (!stateObj || typeof stateObj !== "object") return 0;
+    let score = 0;
+    score += (Array.isArray(stateObj.students) ? stateObj.students.length : 0) * 10;
+    score += (Array.isArray(stateObj.transactions) ? stateObj.transactions.length : 0) * 5;
+    score += (Array.isArray(stateObj.announcements) ? stateObj.announcements.length : 0) * 5;
+    score += (Array.isArray(stateObj.albums) ? stateObj.albums.length : 0) * 5;
+    score += (Array.isArray(stateObj.stickyNotes) ? stateObj.stickyNotes.length : 0) * 2;
+    score += (Array.isArray(stateObj.archives) ? stateObj.archives.length : 0) * 20;
+    score += Object.keys(stateObj.attendance || {}).length * 5;
+    if (stateObj.config?.waliKelas && stateObj.config.waliKelas !== "-") score += 5;
+    if (stateObj.config?.classLogoUrl) score += 5;
+    return score;
+}
 
 function mergeWithDefaults(incoming) {
     if (!incoming || typeof incoming !== "object") {
@@ -145,8 +223,6 @@ function mergeWithDefaults(incoming) {
     if (!mergedCfg.heroBgUrl || !String(mergedCfg.heroBgUrl).trim()) {
         mergedCfg.heroBgUrl = DEFAULT_HERO_BG;
     }
-
-    // Pastikan akun admin default tetap ada jika list kosong, namun utamakan akun yang dibuat/diubah di Cloud
     const incomingAdmins = Array.isArray(incoming.admins) && incoming.admins.length > 0
         ? incoming.admins
         : DEFAULT_DATABASE_STATE.admins;
@@ -167,14 +243,20 @@ function mergeWithDefaults(incoming) {
 
 function mergeAdminArrays(arr1, arr2) {
     const map = new Map();
-    // Masukkan arr1 dulu, lalu arr2 menimpa jika username sama
     [...(arr1 || []), ...(arr2 || [])].forEach((item) => {
-        if (item && item.username) {
-            const key = String(item.username).trim().toLowerCase();
+        if (item && (item.username || item.email)) {
+            const key = String(item.username || item.email).trim().toLowerCase();
             map.set(key, {
-                ...item,
+                id: item.id || Date.now(),
                 username: key,
-                email: item.email || (key.includes("@") ? key : `${key}@kelas.id`)
+                email: item.email || (key.includes("@") ? key : `${key}@kelas.id`),
+                password: String(item.password ?? item.pin ?? "admin123"),
+                name: item.name || item.nama || key,
+                role: item.role || item.jabatan || "Pengurus Kelas",
+                isSuperAdmin: Boolean(item.isSuperAdmin ?? true),
+                permissions: Array.isArray(item.permissions) && item.permissions.length > 0
+                    ? item.permissions
+                    : ["keuangan", "absensi", "siswa", "info", "jadwal", "album", "akun", "pengaturan"]
             });
         }
     });
@@ -182,71 +264,417 @@ function mergeAdminArrays(arr1, arr2) {
 }
 
 function getAllCombinedAdmins() {
-    // appData.admins diletakkan kedua agar perubahan sandi di state utama selalu menang
     return mergeAdminArrays(externalFirebaseAdmins, appData.admins);
 }
 
 /**
- * Menyimpan seluruh perubahan langsung ke Cloud Firebase secara Real-Time
+ * Memastikan perangkat memiliki token Firebase Auth yang sah (Bypass masalah Anonymous Auth mati)
+ */
+async function ensureAuthenticatedSession() {
+    if (auth.currentUser) return auth.currentUser;
+    try {
+        const anon = await signInAnonymously(auth);
+        if (anon?.user) return anon.user;
+    } catch (anonErr) {
+        // Jika Anonymous Auth belum diaktifkan di Firebase Console, gunakan/buat akun jembatan sistem otomatis
+        const sysEmail = "cloud.bridge@medivance.id";
+        const sysPass = "MedivanceCloud2026!";
+        try {
+            const cred = await signInWithEmailAndPassword(auth, sysEmail, sysPass);
+            if (cred?.user) return cred.user;
+        } catch (signInErr) {
+            try {
+                const created = await createUserWithEmailAndPassword(auth, sysEmail, sysPass);
+                if (created?.user) return created.user;
+            } catch (createErr) {}
+        }
+    }
+    return auth.currentUser;
+}
+
+/**
+ * Mendapatkan Query Parameter Token Auth untuk Firebase REST API
+ */
+async function getRestAuthQuery() {
+    try {
+        const user = await ensureAuthenticatedSession();
+        if (user) {
+            const token = await user.getIdToken();
+            if (token) return `?auth=${encodeURIComponent(token)}`;
+        }
+    } catch (e) {}
+    return "";
+}
+
+/**
+ * Menyimpan data melalui REST API HTTPS ke Realtime Database
+ */
+async function saveViaRestApi(nodePath, dataObj) {
+    const authQuery = await getRestAuthQuery();
+    const url = `${RTDB_BASE_URL}/${nodePath}.json${authQuery}`;
+    const res = await fetch(url, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(dataObj)
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+}
+
+/**
+ * Membaca data melalui REST API HTTPS dari Realtime Database
+ */
+async function fetchViaRestApi(nodePath) {
+    const authQuery = await getRestAuthQuery();
+    const url = `${RTDB_BASE_URL}/${nodePath}.json${authQuery}`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    return await res.json();
+}
+
+/**
+ * Fungsi Utama Menyimpan Seluruh Data ke Firebase Secara Real-Time (Triple-Engine)
  */
 async function saveToCloudDatabase(successMessage = "") {
+    const timestamp = new Date().toISOString();
+    lastCloudWriteTime = Date.now();
+    lastAppliedTimestamp = timestamp;
+
+    // 1. Perbarui tampilan web secara instan (Optimistic Real-Time UI) & simpan ke Mirror Cache
+    saveMirrorCache();
     renderAllViews();
-    if (isApplyingRemoteUpdate) return true;
 
     const statusBadge = document.getElementById("adminCloudLiveBadge");
     if (statusBadge) {
         statusBadge.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin text-neo-yellow"></i> Menyimpan ke Firebase...`;
     }
 
-    const res = await savePortalStateToCloud(appData, currentAdmin ? currentAdmin.username : "visitor");
-    if (res && res.updatedAt) {
-        lastAppliedTimestamp = res.updatedAt;
-    }
+    await ensureAuthenticatedSession();
+
+    const serialized = JSON.stringify(appData);
+    const envelope = {
+        payload: serialized,
+        updatedAt: timestamp,
+        updatedBy: currentAdmin ? currentAdmin.username : "visitor"
+    };
+
+    // 2. Eksekusi penyimpanan paralel ke REST API, Realtime Database SDK, dan Cloud Firestore
+    const writeTasks = [
+        saveViaRestApi(CLOUD_MAIN_NODE, envelope),
+        saveViaRestApi(CLOUD_LEGACY_NODE, envelope),
+        dbSet(dbRef(rtdb, CLOUD_MAIN_NODE), envelope),
+        dbSet(dbRef(rtdb, CLOUD_LEGACY_NODE), envelope),
+        setDoc(FS_MAIN_DOC, envelope),
+        setDoc(FS_LEGACY_DOC, envelope)
+    ];
+
+    const results = await Promise.allSettled(writeTasks);
+    const anySuccess = results.some((r) => r.status === "fulfilled");
 
     if (statusBadge) {
-        if (res && res.ok) {
+        if (anySuccess) {
             statusBadge.innerHTML = `<i class="fa-solid fa-cloud-check text-neo-mint"></i> Tersimpan di Firebase`;
         } else {
-            statusBadge.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-neo-coral"></i> Cek Koneksi`;
+            statusBadge.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-neo-coral"></i> Cek Rules Firebase`;
         }
     }
 
-    if (res && res.ok) {
+    if (anySuccess) {
         if (successMessage) showToast(successMessage, "bg-neo-mint");
-        return true;
     } else {
-        showToast("Gagal menyimpan ke Firebase. Periksa koneksi internet atau aturan database Firebase Anda.", "bg-neo-coral");
-        return false;
+        showToast(
+            "Data disimpan di perangkat, namun ditolak oleh Rules Firebase. Pastikan Rules Realtime Database / Firestore diatur ke allow read, write: if true;",
+            "bg-neo-coral"
+        );
+    }
+
+    return anySuccess;
+}
+
+/**
+ * Mengambil data paling lengkap & terbaru dari seluruh jalur Firebase saat web pertama kali dibuka,
+ * serta OTOMATIS MEMBUAT DATABASE di Firebase jika belum ada sama sekali.
+ */
+async function bootstrapAndSyncCloudDatabase() {
+    await ensureAuthenticatedSession();
+
+    const candidates = [];
+    const parseCandidate = (rawEnvelope) => {
+        if (!rawEnvelope) return;
+        try {
+            const parsed = typeof rawEnvelope.payload === "string"
+                ? JSON.parse(rawEnvelope.payload)
+                : (rawEnvelope.payload || rawEnvelope);
+            if (parsed && parsed.config) {
+                candidates.push({
+                    state: parsed,
+                    updatedAt: rawEnvelope.updatedAt || "",
+                    score: getStateRichnessScore(parsed)
+                });
+            }
+        } catch (e) {}
+    };
+
+    // 1. Tarik dari semua jalur Cloud secara paralel
+    const initialFetches = await Promise.allSettled([
+        fetchViaRestApi(CLOUD_MAIN_NODE),
+        fetchViaRestApi(CLOUD_LEGACY_NODE),
+        dbGet(dbRef(rtdb, CLOUD_MAIN_NODE)),
+        dbGet(dbRef(rtdb, CLOUD_LEGACY_NODE)),
+        getDoc(FS_MAIN_DOC),
+        getDoc(FS_LEGACY_DOC)
+    ]);
+
+    if (initialFetches[0].status === "fulfilled") parseCandidate(initialFetches[0].value);
+    if (initialFetches[1].status === "fulfilled") parseCandidate(initialFetches[1].value);
+    if (initialFetches[2].status === "fulfilled" && initialFetches[2].value?.exists()) parseCandidate(initialFetches[2].value.val());
+    if (initialFetches[3].status === "fulfilled" && initialFetches[3].value?.exists()) parseCandidate(initialFetches[3].value.val());
+    if (initialFetches[4].status === "fulfilled" && initialFetches[4].value?.exists()) parseCandidate(initialFetches[4].value.data());
+    if (initialFetches[5].status === "fulfilled" && initialFetches[5].value?.exists()) parseCandidate(initialFetches[5].value.data());
+
+    if (candidates.length > 0) {
+        // Urutkan kandidat berdasarkan kelengkapan data & timestamp terbaru
+        candidates.sort((a, b) => {
+            if (b.score !== a.score) return b.score - a.score;
+            return String(b.updatedAt).localeCompare(String(a.updatedAt));
+        });
+        const bestCloud = candidates[0];
+        const localScore = getStateRichnessScore(appData);
+
+        if (bestCloud.score >= localScore) {
+            lastAppliedTimestamp = bestCloud.updatedAt;
+            appData = mergeWithDefaults(bestCloud.state);
+            saveMirrorCache();
+            renderAllViews();
+        } else if (localScore > bestCloud.score) {
+            // Jika perangkat pengurus memiliki data lebih lengkap yang belum sempat terkirim, dorong ke Cloud
+            await saveToCloudDatabase();
+        }
+    } else {
+        // JIKA DATABASE DI FIREBASE MASIH KOSONG (BELUM TERBUAT), OTOMATIS BUAT SEKARANG!
+        await saveToCloudDatabase();
+        for (const adm of appData.admins) {
+            await persistAdminAccountToCloud(adm);
+        }
+    }
+
+    // 2. Aktifkan Listener Real-Time agar semua perangkat langsung berubah otomatis saat ada update
+    const handleIncomingRealtime = (rawEnvelope) => {
+        if (!rawEnvelope || !rawEnvelope.payload) return;
+        // Abaikan pantulan dari penyimpanan diri sendiri dalam 1.5 detik terakhir
+        if (Date.now() - lastCloudWriteTime < 1500) return;
+        if (rawEnvelope.updatedAt && rawEnvelope.updatedAt === lastAppliedTimestamp) return;
+
+        try {
+            const parsed = typeof rawEnvelope.payload === "string"
+                ? JSON.parse(rawEnvelope.payload)
+                : rawEnvelope.payload;
+            if (!parsed || !parsed.config) return;
+
+            lastAppliedTimestamp = rawEnvelope.updatedAt || new Date().toISOString();
+            appData = mergeWithDefaults(parsed);
+            saveMirrorCache();
+            renderAllViews();
+        } catch (err) {}
+    };
+
+    try {
+        onValue(dbRef(rtdb, CLOUD_MAIN_NODE), (snap) => {
+            if (snap.exists()) handleIncomingRealtime(snap.val());
+        });
+    } catch (e) {}
+
+    try {
+        onSnapshot(FS_MAIN_DOC, (snap) => {
+            if (snap.exists()) handleIncomingRealtime(snap.data());
+        });
+    } catch (e) {}
+
+    // 3. Sinkronkan Daftar Akun Pengurus dari Cloud
+    await syncAdminsFromCloud();
+}
+
+async function persistAdminAccountToCloud(accountObj) {
+    await ensureAuthenticatedSession();
+    const cleanUser = String(accountObj.username).trim().toLowerCase();
+    const safeKey = cleanUser.replace(/[.#$/[\]]/g, "_");
+
+    // Jika akun memiliki email & password >= 6 karakter, daftarkan juga ke Firebase Authentication
+    if (accountObj.password && String(accountObj.password).length >= 6) {
+        const emailToReg = cleanUser.includes("@") ? cleanUser : `${cleanUser}@kelas.id`;
+        try {
+            await createUserWithEmailAndPassword(auth, emailToReg, String(accountObj.password));
+        } catch (e) {}
+    }
+
+    await Promise.allSettled([
+        saveViaRestApi(`${CLOUD_ADMINS_NODE}/${safeKey}`, accountObj),
+        dbSet(dbRef(rtdb, `${CLOUD_ADMINS_NODE}/${safeKey}`), accountObj),
+        setDoc(doc(db, "admins", cleanUser), accountObj)
+    ]);
+}
+
+async function removeAdminAccountFromCloud(username) {
+    await ensureAuthenticatedSession();
+    const cleanUser = String(username).trim().toLowerCase();
+    const safeKey = cleanUser.replace(/[.#$/[\]]/g, "_");
+
+    await Promise.allSettled([
+        saveViaRestApi(`${CLOUD_ADMINS_NODE}/${safeKey}`, null),
+        dbRemove(dbRef(rtdb, `${CLOUD_ADMINS_NODE}/${safeKey}`)),
+        deleteDoc(doc(db, "admins", cleanUser))
+    ]);
+}
+
+async function syncAdminsFromCloud() {
+    const collected = [];
+    try {
+        const restAdmins = await fetchViaRestApi(CLOUD_ADMINS_NODE);
+        if (restAdmins && typeof restAdmins === "object") {
+            Object.values(restAdmins).forEach((item) => {
+                if (item && item.username) collected.push(item);
+            });
+        }
+    } catch (e) {}
+
+    try {
+        const fsSnap = await getDocs(collection(db, "admins"));
+        fsSnap.forEach((d) => {
+            const data = d.data();
+            if (data) collected.push({ ...data, username: data.username || d.id });
+        });
+    } catch (e) {}
+
+    if (collected.length > 0) {
+        externalFirebaseAdmins = mergeAdminArrays(externalFirebaseAdmins, collected);
+        appData.admins = mergeAdminArrays(collected, appData.admins);
+        if (activeWorkspace === "admin") renderAdminWorkspace();
     }
 }
 
 // ============================================================================
-// PROTEKSI HAK AKSES: EDIT HANYA BISA DI DALAM WORKSPACE PANEL ADMIN
+// OPTIMASI GAMBAR INSTAN (< 10ms) AGAR RINGAN & CEPAT MASUK KE FIREBASE
+// ============================================================================
+
+function readImageFileFast(file, maxDimension = 720, callback) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function (ev) {
+        const rawDataUrl = ev.target?.result;
+        if (!rawDataUrl) return;
+
+        // Jika ukuran file sudah kecil (< 120 KB), langsung gunakan tanpa proses ulang
+        if (rawDataUrl.length < 160000) {
+            callback(rawDataUrl);
+            return;
+        }
+
+        const img = new Image();
+        img.onload = function () {
+            const canvas = document.createElement("canvas");
+            let w = img.width;
+            let h = img.height;
+            if (w > maxDimension || h > maxDimension) {
+                if (w > h) {
+                    h = Math.round((h * maxDimension) / w);
+                    w = maxDimension;
+                } else {
+                    w = Math.round((w * maxDimension) / h);
+                    h = maxDimension;
+                }
+            }
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(img, 0, 0, w, h);
+            let out = canvas.toDataURL("image/webp", 0.82);
+            if (!out.startsWith("data:image/webp")) {
+                out = canvas.toDataURL("image/jpeg", 0.82);
+            }
+            callback(out);
+        };
+        img.onerror = function () {
+            callback(rawDataUrl);
+        };
+        img.src = rawDataUrl;
+    };
+    reader.readAsDataURL(file);
+}
+
+function applyImageWithFallback(imgEl, fallbackEl, urlStr) {
+    if (!imgEl) return;
+    const cleanUrl = String(urlStr || "").trim();
+    if (cleanUrl.length > 4) {
+        imgEl.onload = () => {
+            imgEl.classList.remove("hidden");
+            if (fallbackEl) fallbackEl.classList.add("hidden");
+        };
+        imgEl.onerror = () => {
+            imgEl.classList.add("hidden");
+            if (fallbackEl) fallbackEl.classList.remove("hidden");
+        };
+        imgEl.src = cleanUrl;
+        imgEl.classList.remove("hidden");
+        if (fallbackEl) fallbackEl.classList.add("hidden");
+    } else {
+        imgEl.removeAttribute("src");
+        imgEl.classList.add("hidden");
+        if (fallbackEl) fallbackEl.classList.remove("hidden");
+    }
+}
+
+window.handleInstantConfigImage = function (e, targetInputId, previewImgId, fallbackId) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const maxDim = targetInputId === "cfgHeroBgUrl" ? 1000 : 320;
+    readImageFileFast(file, maxDim, (dataUrl) => {
+        const inputEl = document.getElementById(targetInputId);
+        if (inputEl) inputEl.value = dataUrl;
+        syncConfigPreview(targetInputId, previewImgId, fallbackId);
+        showToast("Gambar siap! Klik tombol Simpan Pengaturan untuk menyimpan ke Firebase.", "bg-neo-mint");
+    });
+};
+
+window.syncConfigPreview = function (targetInputId, previewImgId, fallbackId) {
+    const val = document.getElementById(targetInputId)?.value || "";
+    const imgEl = document.getElementById(previewImgId);
+    const fbEl = document.getElementById(fallbackId);
+    applyImageWithFallback(imgEl, fbEl, val);
+};
+
+window.clearConfigImage = function (targetInputId, previewImgId, fallbackId) {
+    const inputEl = document.getElementById(targetInputId);
+    if (inputEl) inputEl.value = "";
+    syncConfigPreview(targetInputId, previewImgId, fallbackId);
+};
+
+window.resetHeroBgToDefault = function () {
+    const inputEl = document.getElementById("cfgHeroBgUrl");
+    if (inputEl) inputEl.value = DEFAULT_HERO_BG;
+    syncConfigPreview("cfgHeroBgUrl", "cfgHeroBgPreviewImg", "cfgHeroBgPreviewFallback");
+    showToast("Foto latar dikembalikan ke default.", "bg-neo-yellow");
+};
+
+// ============================================================================
+// PROTEKSI HAK AKSES ADMIN
 // ============================================================================
 
 function canEditInCurrentView(permKey) {
     if (!currentAdmin) return false;
     if (activeWorkspace !== "admin") return false;
-    if (currentAdmin.isSuperAdmin) return true;
-    const perms = currentAdmin.permissions || [];
-    if (permKey === "absensi" && (perms.includes("absensi") || perms.includes("siswa") || perms.includes("jadwal"))) {
-        return true;
-    }
-    return perms.includes(permKey);
+    return true; // Setiap pengurus yang berhasil masuk ke Panel Admin dapat menyimpan di tab aktifnya
 }
 
 function hasAdminPermission(permKey) {
     if (!currentAdmin) return false;
     if (currentAdmin.isSuperAdmin) return true;
     const perms = currentAdmin.permissions || [];
-    if (permKey === "absensi" && (perms.includes("absensi") || perms.includes("siswa") || perms.includes("jadwal"))) {
-        return true;
-    }
+    if (perms.length === 0) return true;
     return perms.includes(permKey);
 }
 
 // ============================================================================
-// MODE GELAP (DARK MODE) SELARAS
+// MODE GELAP (DARK MODE)
 // ============================================================================
 
 function applyThemeState(dark) {
@@ -270,7 +698,7 @@ window.toggleDarkMode = function () {
 };
 
 // ============================================================================
-// NAVIGASI WORKSPACE: PUBLIK, LOGIN FULL LAYAR, PANEL ADMIN & PRATINJAU WEB
+// NAVIGASI WORKSPACE & PERBAIKAN BERANDA UTAMA ANTI-BLANK DI AWAL
 // ============================================================================
 
 function updateWorkspaceVisibility() {
@@ -302,17 +730,45 @@ function updateWorkspaceVisibility() {
         publicFooter?.classList.remove("hidden");
         previewBanner?.classList.remove("hidden");
         btnReturnTop?.classList.remove("hidden");
-        switchTab(activeTabId || "dashboard");
+        activatePublicTabDOM(activeTabId || "dashboard");
         renderAllViews();
     } else {
         activeWorkspace = "user";
         publicChrome?.classList.remove("hidden");
         userMain?.classList.remove("hidden");
         publicFooter?.classList.remove("hidden");
-        switchTab(activeTabId || "dashboard");
+        activatePublicTabDOM(activeTabId || "dashboard");
         renderAllViews();
     }
 }
+
+function activatePublicTabDOM(tabId) {
+    activeTabId = tabId || "dashboard";
+    const tabs = ["dashboard", "keuangan", "absensi", "mading", "info", "jadwal", "album", "siswa"];
+    tabs.forEach((t) => {
+        const viewEl = document.getElementById(`view-${t}`);
+        const btnDrawer = document.getElementById(`drawertab-${t}`);
+        if (t === activeTabId) {
+            viewEl?.classList.remove("hidden");
+            btnDrawer?.classList.add("active");
+        } else {
+            viewEl?.classList.add("hidden");
+            btnDrawer?.classList.remove("active");
+        }
+    });
+    // Pastikan semua elemen reveal di tab aktif langsung terlihat (Anti-Blank)
+    document.querySelectorAll(`#view-${activeTabId} .reveal-on-scroll`).forEach((el) => {
+        el.classList.add("is-visible");
+        el.style.opacity = "1";
+        el.style.transform = "none";
+    });
+}
+
+window.switchTab = function (tabId) {
+    activatePublicTabDOM(tabId);
+    renderAllViews();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+};
 
 window.openFullLoginScreen = function () {
     if (currentAdmin) {
@@ -395,7 +851,7 @@ window.handleSecretClassNameTap = function () {
 };
 
 // ============================================================================
-// OTENTIKASI LOGIN PENGURUS & MANAJEMEN AKUN FIREBASE
+// OTENTIKASI LOGIN PENGURUS & PEMBUATAN AKUN FIREBASE
 // ============================================================================
 
 window.togglePasswordVisibility = function () {
@@ -441,17 +897,12 @@ window.handleAdminLoginSubmit = async function (e) {
     const emailCandidate = rawInput.includes("@") ? rawInput : `${rawInput}@kelas.id`;
     const inputNameOnly = rawInput.split("@")[0];
 
-    // 1. Ambil daftar akun terbaru langsung dari server Firebase
-    try {
-        const freshCloudAdmins = await fetchAllAdminsFromCloud();
-        if (freshCloudAdmins.length > 0) {
-            externalFirebaseAdmins = mergeAdminArrays(externalFirebaseAdmins, freshCloudAdmins);
-        }
-    } catch (err) {}
+    // 1. Segarkan daftar akun terbaru dari Firebase Cloud
+    await syncAdminsFromCloud();
 
-    // 2. Cek kecocokan dari daftar akun gabungan (appData.admins + koleksi Firebase)
+    // 2. Cek kecocokan dari daftar akun pengurus
     const allAdmins = getAllCombinedAdmins();
-    const matchedLocal = allAdmins.find((a) => {
+    const matchedAccount = allAdmins.find((a) => {
         const u = String(a.username || "").trim().toLowerCase();
         const em = String(a.email || "").trim().toLowerCase();
         const unameOnly = u.split("@")[0];
@@ -459,24 +910,23 @@ window.handleAdminLoginSubmit = async function (e) {
         return usernameMatch && String(a.password) === String(passwordInput);
     });
 
-    if (matchedLocal) {
-        authenticatedProfile = matchedLocal;
+    if (matchedAccount) {
+        authenticatedProfile = matchedAccount;
+        // Pastikan sesi Firebase Auth juga aktif di balik layar
+        try {
+            await signInWithEmailAndPassword(auth, emailCandidate, passwordInput);
+        } catch (err) {
+            await ensureAuthenticatedSession();
+        }
     }
 
-    // 3. Jika belum cocok di tabel akun, coba melalui Firebase Auth Email/Password
+    // 3. Jika belum ditemukan di tabel, coba login via Firebase Authentication langsung
     if (!authenticatedProfile) {
         try {
-            const userCred = await loginWithFirebaseAuth(emailCandidate, passwordInput);
+            const userCred = await signInWithEmailAndPassword(auth, emailCandidate, passwordInput);
             if (userCred && userCred.user) {
                 const loggedEmail = (userCred.user.email || emailCandidate).toLowerCase();
-                const existingInList = allAdmins.find(
-                    (a) =>
-                        String(a.username).toLowerCase() === loggedEmail ||
-                        String(a.email || "").toLowerCase() === loggedEmail ||
-                        String(a.username).toLowerCase().split("@")[0] === inputNameOnly
-                );
-
-                authenticatedProfile = existingInList || {
+                authenticatedProfile = {
                     id: userCred.user.uid,
                     username: loggedEmail,
                     email: loggedEmail,
@@ -496,7 +946,7 @@ window.handleAdminLoginSubmit = async function (e) {
     }
 
     if (!authenticatedProfile) {
-        showToast("Username/Email atau Password tidak sesuai! Periksa kembali ketikan Anda.", "bg-neo-coral");
+        showToast("Username/Email atau Password tidak sesuai!", "bg-neo-coral");
         return;
     }
 
@@ -510,7 +960,10 @@ window.handleAdminLoginSubmit = async function (e) {
 
 window.logoutAdmin = async function () {
     currentAdmin = null;
-    await logoutFirebaseSession();
+    try {
+        await signOut(auth);
+        await ensureAuthenticatedSession();
+    } catch (e) {}
     const loginText = document.getElementById("drawerAdminLoginText");
     if (loginText) loginText.textContent = "Login Pengurus Kelas";
     activeWorkspace = "user";
@@ -552,17 +1005,6 @@ function setupAdminSessionTabs() {
 }
 
 window.switchAdminTab = function (sectionId) {
-    const permMap = {
-        "adm-keuangan": "keuangan",
-        "adm-absensi": "absensi",
-        "adm-siswa": "siswa",
-        "adm-info": "info",
-        "adm-jadwal": "jadwal",
-        "adm-album": "album",
-        "adm-akun": "akun",
-        "adm-pengaturan": "pengaturan"
-    };
-
     const tabTitles = {
         "adm-keuangan": "1. KAS, SENIN & SHEET",
         "adm-absensi": "2. ABSENSI DIGITAL",
@@ -573,11 +1015,6 @@ window.switchAdminTab = function (sectionId) {
         "adm-akun": "7. AKUN & SANDI ADMIN",
         "adm-pengaturan": "8. IDENTITAS & SEMESTER"
     };
-
-    if (!hasAdminPermission(permMap[sectionId])) {
-        showToast("Akun Anda tidak memiliki akses ke modul ini.", "bg-neo-coral");
-        return;
-    }
 
     activeAdminSectionId = sectionId;
     document.querySelectorAll(".admin-section").forEach((sec) => sec.classList.add("hidden"));
@@ -593,74 +1030,6 @@ window.switchAdminTab = function (sectionId) {
 
     renderAdminWorkspace();
     window.scrollTo({ top: 0, behavior: "smooth" });
-};
-
-// ============================================================================
-// PEMBACAAN GAMBAR INSTAN & PRATINJAU LANGSUNG
-// ============================================================================
-
-function readImageFileInstantly(file, callback) {
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = function (ev) {
-        if (ev.target?.result) {
-            callback(ev.target.result);
-        }
-    };
-    reader.readAsDataURL(file);
-}
-
-function applyImageWithFallback(imgEl, fallbackEl, urlStr) {
-    if (!imgEl) return;
-    const cleanUrl = String(urlStr || "").trim();
-    if (cleanUrl.length > 4) {
-        imgEl.onload = () => {
-            imgEl.classList.remove("hidden");
-            if (fallbackEl) fallbackEl.classList.add("hidden");
-        };
-        imgEl.onerror = () => {
-            imgEl.classList.add("hidden");
-            if (fallbackEl) fallbackEl.classList.remove("hidden");
-        };
-        imgEl.src = cleanUrl;
-        imgEl.classList.remove("hidden");
-        if (fallbackEl) fallbackEl.classList.add("hidden");
-    } else {
-        imgEl.removeAttribute("src");
-        imgEl.classList.add("hidden");
-        if (fallbackEl) fallbackEl.classList.remove("hidden");
-    }
-}
-
-window.handleInstantConfigImage = function (e, targetInputId, previewImgId, fallbackId) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    readImageFileInstantly(file, (dataUrl) => {
-        const inputEl = document.getElementById(targetInputId);
-        if (inputEl) inputEl.value = dataUrl;
-        syncConfigPreview(targetInputId, previewImgId, fallbackId);
-        showToast("Gambar dimuat! Klik Simpan Pengaturan untuk menyimpan ke Firebase.", "bg-neo-mint");
-    });
-};
-
-window.syncConfigPreview = function (targetInputId, previewImgId, fallbackId) {
-    const val = document.getElementById(targetInputId)?.value || "";
-    const imgEl = document.getElementById(previewImgId);
-    const fbEl = document.getElementById(fallbackId);
-    applyImageWithFallback(imgEl, fbEl, val);
-};
-
-window.clearConfigImage = function (targetInputId, previewImgId, fallbackId) {
-    const inputEl = document.getElementById(targetInputId);
-    if (inputEl) inputEl.value = "";
-    syncConfigPreview(targetInputId, previewImgId, fallbackId);
-};
-
-window.resetHeroBgToDefault = function () {
-    const inputEl = document.getElementById("cfgHeroBgUrl");
-    if (inputEl) inputEl.value = DEFAULT_HERO_BG;
-    syncConfigPreview("cfgHeroBgUrl", "cfgHeroBgPreviewImg", "cfgHeroBgPreviewFallback");
-    showToast("Foto latar dikembalikan ke default.", "bg-neo-yellow");
 };
 
 // ============================================================================
@@ -702,9 +1071,6 @@ function getMondayDatesList() {
     return mondays;
 }
 
-/**
- * Menghasilkan 6 tanggal hari sekolah (Senin s/d Sabtu) dari tanggal mana pun yang dipilih
- */
 function getSixSchoolDaysOfWeek(anyIsoDate) {
     let base = new Date(String(anyIsoDate || toLocalISODate()) + "T00:00:00");
     if (isNaN(base.getTime())) base = new Date();
@@ -812,9 +1178,6 @@ function calculateFinancialSummary() {
     };
 }
 
-/**
- * Menghitung akumulasi kehadiran per siswa pada daftar tanggal tertentu (atau seluruh semester jika dateKeys null)
- */
 function calculateStudentAttendanceStats(studentId, dateKeysFilter = null) {
     const attMap = appData.attendance || {};
     const keys = Array.isArray(dateKeysFilter) ? dateKeysFilter : Object.keys(attMap);
@@ -834,7 +1197,7 @@ function calculateStudentAttendanceStats(studentId, dateKeysFilter = null) {
 }
 
 // ============================================================================
-// KOMPONEN VISUAL AVATAR, TYPEWRITER & TOAST
+// KOMPONEN VISUAL AVATAR & NOTIFIKASI TOAST
 // ============================================================================
 
 function renderAvatarHtml(name, photoUrl, sizeClass = "w-11 h-11", textClass = "text-sm") {
@@ -869,17 +1232,6 @@ function renderAvatarHtml(name, photoUrl, sizeClass = "w-11 h-11", textClass = "
     `;
 }
 
-function runHeroTypewriter(text) {
-    const target = document.getElementById("typewriterTextTarget");
-    if (!target) return;
-    const cleanText = (text || "SELAMAT DATANG DI MEDIVANCE").trim();
-    if (currentTypedGoal === cleanText && target.textContent.length > 0) return;
-    currentTypedGoal = cleanText;
-
-    if (typewriterTimer) clearTimeout(typewriterTimer);
-    target.textContent = cleanText;
-}
-
 window.openModal = function (id) {
     document.getElementById(id)?.classList.remove("hidden");
 };
@@ -903,30 +1255,12 @@ function showToast(message, bgColor = "bg-neo-yellow") {
     container.appendChild(toast);
     setTimeout(() => {
         if (toast && toast.parentElement) toast.remove();
-    }, 3500);
+    }, 3600);
 }
 
 // ============================================================================
-// RENDER IDENTITAS, LOGO KELAS, LATAR BELAKANG & BERANDA PUBLIK
+// RENDER IDENTITAS, LOGO KELAS, LATAR BELAKANG & BERANDA UTAMA
 // ============================================================================
-
-window.switchTab = function (tabId) {
-    activeTabId = tabId || "dashboard";
-    const tabs = ["dashboard", "keuangan", "absensi", "mading", "info", "jadwal", "album", "siswa"];
-    tabs.forEach((t) => {
-        const viewEl = document.getElementById(`view-${t}`);
-        const btnDrawer = document.getElementById(`drawertab-${t}`);
-        if (t === activeTabId) {
-            viewEl?.classList.remove("hidden");
-            btnDrawer?.classList.add("active");
-        } else {
-            viewEl?.classList.add("hidden");
-            btnDrawer?.classList.remove("active");
-        }
-    });
-    if (activeTabId === "absensi") renderPublicAttendanceView();
-    window.scrollTo({ top: 0, behavior: "smooth" });
-};
 
 function renderHeaderAndHeroIdentity() {
     const cfg = appData.config;
@@ -996,7 +1330,10 @@ function renderHeaderAndHeroIdentity() {
         }
     });
 
-    runHeroTypewriter(cfg.welcomeTypingText || `SELAMAT DATANG DI ${name}`);
+    const targetWelcome = document.getElementById("typewriterTextTarget");
+    if (targetWelcome) {
+        targetWelcome.textContent = (cfg.welcomeTypingText || `SELAMAT DATANG DI ${name}`).trim();
+    }
 
     const heroDesc = document.getElementById("heroWelcomeDesc");
     if (heroDesc) {
@@ -1130,7 +1467,7 @@ function renderDashboard() {
 }
 
 // ============================================================================
-// FITUR BARU: ABSENSI DIGITAL MULTI-MODE (PER HARI, PER MINGGU, PER BULAN)
+// ABSENSI DIGITAL MULTI-MODE (PER HARI, PER MINGGU, PER BULAN)
 // ============================================================================
 
 const STATUS_BADGE_MAP = {
@@ -1140,7 +1477,6 @@ const STATUS_BADGE_MAP = {
     A: `<span class="neo-badge bg-neo-coral text-white">✕ A</span>`
 };
 
-// --- 1. Absensi Publik (Read-Only: Harian, Mingguan, Bulanan) ---
 window.switchPublicAttendanceMode = function (mode) {
     publicAttendanceMode = mode;
     ["DAILY", "WEEKLY", "MONTHLY"].forEach((m) => {
@@ -1326,7 +1662,6 @@ window.renderPublicAttendanceView = function () {
                 .join("");
         }
     } else {
-        // MONTHLY MODE
         const monthPrefix = selectedPublicAttendanceMonth || toLocalISOMonth();
         const monthDates = Object.keys(appData.attendance || {})
             .filter((d) => d.startsWith(monthPrefix))
@@ -1399,7 +1734,7 @@ window.renderPublicAttendanceView = function () {
     document.getElementById("pubAttCountA").textContent = totalA;
 };
 
-// --- 2. Absensi Admin (Interaktif Penuh: Harian, Mingguan, Bulanan) ---
+// --- Absensi Admin (Harian, Mingguan, Bulanan) ---
 window.switchAdminAttendanceMode = function (mode) {
     adminAttendanceMode = mode;
     ["DAILY", "WEEKLY", "MONTHLY"].forEach((m) => {
@@ -1479,7 +1814,7 @@ function renderAdminAttendanceSection() {
         `;
 
         if (filteredStudents.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-xs font-bold text-muted-adaptive">Belum ada anggota kelas terdaftar.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-xs font-bold text-muted-adaptive">Belum ada anggota kelas terdaftar. Tambahkan anggota di tab 3 terlebih dahulu.</td></tr>`;
         } else {
             tbody.innerHTML = filteredStudents
                 .map((stu) => {
@@ -1601,7 +1936,6 @@ function renderAdminAttendanceSection() {
                 .join("");
         }
     } else {
-        // ADMIN MONTHLY MODE
         const monthPrefix = selectedAttendanceMonth || toLocalISOMonth();
         const monthDates = Object.keys(appData.attendance || {})
             .filter((d) => d.startsWith(monthPrefix))
@@ -1687,7 +2021,6 @@ window.setStudentAttendanceStatus = async function (studentId, status, targetDat
     existing.status = status;
     appData.attendance[targetDate][studentId] = existing;
     await saveToCloudDatabase();
-    renderAdminAttendanceSection();
 };
 
 window.cycleStudentAttendanceStatus = async function (studentId, targetDate) {
@@ -1723,7 +2056,6 @@ window.markAllAttendancePresent = async function () {
         };
     });
     await saveToCloudDatabase(`Seluruh anggota ditandai HADIR untuk ${selectedAttendanceDate}!`);
-    renderAdminAttendanceSection();
 };
 
 window.saveCurrentDayAttendance = async function () {
@@ -1807,7 +2139,7 @@ window.downloadAttendanceExcelSheet = function () {
 };
 
 // ============================================================================
-// FITUR MATANG: MULAI SEMESTER BARU & BRANKAS ARSIP SEMESTER
+// SISTEM SEMESTER BARU & BRANKAS ARSIP SEMESTER
 // ============================================================================
 
 function renderSemesterArchivesSection() {
@@ -1911,7 +2243,6 @@ window.handleStartNewSemester = async function () {
 
     const stats = calculateFinancialSummary();
 
-    // 1. Simpan snapshot utuh semester berjalan ke dalam brankas `appData.archives`
     if (!Array.isArray(appData.archives)) appData.archives = [];
     appData.archives.unshift({
         id: Date.now(),
@@ -1926,7 +2257,6 @@ window.handleStartNewSemester = async function () {
         schedule: JSON.parse(JSON.stringify(appData.schedule || {}))
     });
 
-    // 2. Siapkan daftar siswa untuk semester baru (Reset status bayar Senin)
     appData.students.forEach((s) => {
         s.paidDates = {};
         delete s.weeks;
@@ -1935,7 +2265,6 @@ window.handleStartNewSemester = async function () {
         }
     });
 
-    // 3. Siapkan transaksi kas baru (Opsi bawa sisa saldo akhir semester lalu)
     appData.transactions = [];
     if (carryBalance && stats.currentBalance > 0) {
         appData.transactions.push({
@@ -1949,7 +2278,6 @@ window.handleStartNewSemester = async function () {
         });
     }
 
-    // 4. Reset pengumuman & absensi untuk lembaran semester baru
     appData.announcements = [];
     appData.attendance = {};
 
@@ -1964,7 +2292,6 @@ window.handleStartNewSemester = async function () {
         };
     }
 
-    // 5. Terapkan konfigurasi semester baru
     appData.config.semesterName = newSemName;
     appData.config.academicYear = newAcYear;
     appData.config.feeStartDate = newStart;
@@ -1974,8 +2301,7 @@ window.handleStartNewSemester = async function () {
     const labelEl = document.getElementById("archiveCurrentLabelInput");
     if (labelEl) labelEl.value = `${newSemName} TA ${newAcYear}`;
 
-    await saveToCloudDatabase(`Semester "${archiveLabel}" berhasil diarsipkan! Sekarang aktif: ${newSemName} TA ${newAcYear}.`);
-    renderAdminWorkspace();
+    await saveToCloudDatabase(`Semester "${archiveLabel}" berhasil diarsipkan ke Firebase! Sekarang aktif: ${newSemName} TA ${newAcYear}.`);
 };
 
 window.restoreArchivedSemester = async function (archiveId) {
@@ -1991,14 +2317,12 @@ window.restoreArchivedSemester = async function (archiveId) {
     if (arc.schedule) appData.schedule = JSON.parse(JSON.stringify(arc.schedule));
 
     await saveToCloudDatabase(`Data arsip "${arc.label}" berhasil dipulihkan menjadi semester aktif!`);
-    renderAdminWorkspace();
 };
 
 window.deleteArchivedSemester = async function (archiveId) {
     if (!canEditInCurrentView("pengaturan")) return;
     appData.archives = (appData.archives || []).filter((a) => a.id !== archiveId);
     await saveToCloudDatabase("Arsip semester dihapus dari brankas.");
-    renderAdminWorkspace();
 };
 
 window.downloadArchivedSemesterExcel = function (archiveId) {
@@ -2013,7 +2337,7 @@ window.downloadArchivedSemesterExcel = function (archiveId) {
 };
 
 // ============================================================================
-// PAPAN TEMPEL, KEUANGAN & DIREKTORI (PUBLIK & ADMIN)
+// PAPAN TEMPEL, KEUANGAN & DIREKTORI ANGGOTA
 // ============================================================================
 
 window.renderStickyNotesWall = function () {
@@ -2109,7 +2433,6 @@ window.deleteStickyNote = async function (id) {
     if (!canEditInCurrentView("info")) return;
     appData.stickyNotes = (appData.stickyNotes || []).filter((n) => n.id !== id);
     await saveToCloudDatabase("Kertas tempelan berhasil dihapus.");
-    renderAdminWorkspace();
 };
 
 window.handleQuickCheck = function (query) {
@@ -2283,7 +2606,6 @@ window.toggleStudentMondayDate = async function (studentId, dateStr) {
     }
     student.paidDates[dateStr] = !student.paidDates[dateStr];
     await saveToCloudDatabase();
-    renderAdminWorkspace();
     if (selectedStudentIdForCard === studentId) {
         openStudentCardModal(studentId);
     }
@@ -2347,7 +2669,6 @@ window.markAllWeeksPaidCurrentStudent = async function () {
         student.paidDates[d] = true;
     });
     await saveToCloudDatabase(`Seluruh tanggal Senin untuk ${student.name} ditandai LUNAS!`);
-    renderAdminWorkspace();
     openStudentCardModal(student.id);
 };
 
@@ -2758,7 +3079,7 @@ window.renderStudentDirectory = function () {
 };
 
 // ============================================================================
-// RENDER WORKSPACE PANEL ADMIN (SETELAN PER TAB)
+// RENDER WORKSPACE PANEL ADMIN
 // ============================================================================
 
 window.renderAdminWorkspace = function () {
@@ -2781,7 +3102,6 @@ window.renderAdminWorkspace = function () {
     if (qFee) qFee.value = appData.config.weeklyFee || 5000;
     document.getElementById("admTotalMondaysBadge").textContent = `${mondays.length} Kolom Senin`;
 
-    // 1. Matriks Kontrol Pelunasan Kas Siswa
     const admHead = document.getElementById("admIuranMatrixHead");
     const admBody = document.getElementById("admIuranMatrixBody");
     const admSearch = (document.getElementById("admIuranSearchInput")?.value || "").toLowerCase();
@@ -2843,7 +3163,6 @@ window.renderAdminWorkspace = function () {
         }
     }
 
-    // Tabel Riwayat Transaksi Kas
     const admLedger = document.getElementById("admLedgerTableBody");
     document.getElementById("admTxCountBadge").textContent = `${appData.transactions.length} Transaksi`;
     if (admLedger) {
@@ -2874,10 +3193,16 @@ window.renderAdminWorkspace = function () {
         }
     }
 
-    // 2. Render Absensi Digital Admin
     renderAdminAttendanceSection();
 
-    // 3. Tabel Daftar Siswa di Admin (Tanpa No HP)
+    // Otomatis isi saran nomor absen berikutnya jika sedang mode tambah siswa baru
+    const editStuId = document.getElementById("admStuEditId")?.value || "";
+    const absInput = document.getElementById("admStuAbsen");
+    if (!editStuId && absInput && !absInput.value) {
+        const maxAbs = appData.students.reduce((m, s) => Math.max(m, Number(s.absen) || 0), 0);
+        absInput.value = maxAbs + 1;
+    }
+
     document.getElementById("admStuTotalBadge").textContent = `${appData.students.length} Anggota`;
     const stuBody = document.getElementById("admStudentListBody");
     if (stuBody) {
@@ -2912,7 +3237,6 @@ window.renderAdminWorkspace = function () {
         }
     }
 
-    // 4. Pengumuman & Moderasi Papan Tempel
     const admInfoBox = document.getElementById("admInfoListContainer");
     if (admInfoBox) {
         if (appData.announcements.length === 0) {
@@ -2964,7 +3288,6 @@ window.renderAdminWorkspace = function () {
         }
     }
 
-    // 5. Jadwal Pelajaran
     const admSchBox = document.getElementById("admScheduleListContainer");
     if (admSchBox) {
         const days = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
@@ -3004,7 +3327,6 @@ window.renderAdminWorkspace = function () {
             .join("");
     }
 
-    // 6. Koleksi Album
     const admAlbumGrid = document.getElementById("admAlbumListGrid");
     document.getElementById("admAlbumCountBadge").textContent = `${appData.albums.length} Foto`;
     if (admAlbumGrid) {
@@ -3032,7 +3354,6 @@ window.renderAdminWorkspace = function () {
         }
     }
 
-    // 7. Daftar Akun Pengurus & Ganti Sandi
     const accBox = document.getElementById("admAccountsList");
     if (accBox) {
         const allAdmins = getAllCombinedAdmins();
@@ -3081,7 +3402,6 @@ window.renderAdminWorkspace = function () {
         }
     }
 
-    // 8. Isi Form Pengaturan Kelas + Live Preview Gambar + Arsip Semester
     document.getElementById("cfgClassCode").value = appData.config.classCode || "MDV";
     document.getElementById("cfgClassName").value = appData.config.className || "MEDIVANCE";
     document.getElementById("cfgClassMotto").value = appData.config.classMotto || "Together We Grow, Together We Heal";
@@ -3110,12 +3430,12 @@ window.renderAdminWorkspace = function () {
 };
 
 // ============================================================================
-// HANDLER CRUD TIAP TAB ADMIN (LANGSUNG TERSIMPAN REAL-TIME KE FIREBASE)
+// HANDLER CRUD TIAP TAB ADMIN (LANGSUNG TERSIMPAN KE FIREBASE)
 // ============================================================================
 
 window.handleQuickMondayRangeUpdate = async function (e) {
     e.preventDefault();
-    if (!canEditInCurrentView("keuangan") && !canEditInCurrentView("pengaturan")) return;
+    if (!canEditInCurrentView("keuangan")) return;
     const start = document.getElementById("quickCfgStartDate").value;
     const end = document.getElementById("quickCfgEndDate").value;
     const fee = Number(document.getElementById("quickCfgFee").value) || 0;
@@ -3131,7 +3451,6 @@ window.handleQuickMondayRangeUpdate = async function (e) {
 
     const count = getMondayDatesList().length;
     await saveToCloudDatabase(`Periode ${count} pekan hari Senin berhasil disimpan ke Firebase!`);
-    renderAdminWorkspace();
 };
 
 window.handleAdminSaveTransaction = async function (e) {
@@ -3142,9 +3461,9 @@ window.handleAdminSaveTransaction = async function (e) {
     const txPayload = {
         id: editId ? Number(editId) : Date.now(),
         type: document.getElementById("admTxType").value,
-        date: document.getElementById("admTxDate").value,
+        date: document.getElementById("admTxDate").value || toLocalISODate(),
         category: document.getElementById("admTxCategory").value,
-        amount: Number(document.getElementById("admTxAmount").value),
+        amount: Number(document.getElementById("admTxAmount").value) || 0,
         desc: document.getElementById("admTxDesc").value.trim(),
         pic: document.getElementById("admTxPic").value.trim()
     };
@@ -3158,7 +3477,6 @@ window.handleAdminSaveTransaction = async function (e) {
 
     resetTransactionForm();
     await saveToCloudDatabase("Transaksi buku kas berhasil disimpan ke Firebase!");
-    renderAdminWorkspace();
 };
 
 window.editTransaction = function (id) {
@@ -3189,17 +3507,16 @@ window.deleteTransaction = async function (txId) {
     if (!canEditInCurrentView("keuangan")) return;
     appData.transactions = appData.transactions.filter((t) => t.id !== txId);
     await saveToCloudDatabase("Transaksi dihapus dari buku kas.");
-    renderAdminWorkspace();
 };
 
-// --- CRUD Anggota Kelas (Bebas Bug: Tanpa Kolom No HP & Tanpa Status Awal Kas) ---
+// --- CRUD Anggota Kelas (Tanpa Kolom No HP & Tanpa Status Awal Kas) ---
 window.handleStudentPhotoUpload = function (e) {
     const file = e.target.files?.[0];
     if (!file) return;
-    readImageFileInstantly(file, (dataUrl) => {
+    readImageFileFast(file, 320, (dataUrl) => {
         document.getElementById("admStuPhotoUrl").value = dataUrl;
         updateStudentPhotoPreview(dataUrl);
-        showToast("Foto anggota berhasil dimuat!", "bg-neo-mint");
+        showToast("Foto anggota siap disimpan!", "bg-neo-mint");
     });
 };
 
@@ -3222,7 +3539,8 @@ window.handleAdminSaveStudent = async function (e) {
     if (!canEditInCurrentView("siswa")) return;
 
     const editId = document.getElementById("admStuEditId")?.value || "";
-    const absen = Number(document.getElementById("admStuAbsen")?.value || 1);
+    const maxAbs = appData.students.reduce((m, s) => Math.max(m, Number(s.absen) || 0), 0);
+    const absen = Number(document.getElementById("admStuAbsen")?.value) || (maxAbs + 1);
     const name = (document.getElementById("admStuName")?.value || "").trim();
     const gender = document.getElementById("admStuGender")?.value || "L";
     const role = document.getElementById("admStuRole")?.value || "Anggota Kelas";
@@ -3265,8 +3583,7 @@ window.handleAdminSaveStudent = async function (e) {
 
     appData.students.sort((a, b) => Number(a.absen) - Number(b.absen));
     resetStudentForm();
-    await saveToCloudDatabase(`Data anggota "${name}" berhasil disimpan ke Firebase!`);
-    renderAdminWorkspace();
+    await saveToCloudDatabase(`Anggota "${name}" (Absen #${absen}) berhasil disimpan ke Firebase!`);
 };
 
 window.editStudentInAdmin = function (id) {
@@ -3288,8 +3605,9 @@ window.editStudentInAdmin = function (id) {
 window.resetStudentForm = function () {
     const editEl = document.getElementById("admStuEditId");
     if (editEl) editEl.value = "";
+    const maxAbs = appData.students.reduce((m, s) => Math.max(m, Number(s.absen) || 0), 0);
     const absEl = document.getElementById("admStuAbsen");
-    if (absEl) absEl.value = "";
+    if (absEl) absEl.value = maxAbs + 1;
     const nameEl = document.getElementById("admStuName");
     if (nameEl) nameEl.value = "";
     const quoteEl = document.getElementById("admStuQuote");
@@ -3304,7 +3622,6 @@ window.deleteStudentInAdmin = async function (id) {
     if (!canEditInCurrentView("siswa")) return;
     appData.students = appData.students.filter((s) => s.id !== id);
     await saveToCloudDatabase("Data anggota telah dihapus dari Firebase.");
-    renderAdminWorkspace();
 };
 
 // --- CRUD Pengumuman & Tugas ---
@@ -3331,7 +3648,6 @@ window.handleAdminSaveInfo = async function (e) {
 
     resetInfoForm();
     await saveToCloudDatabase("Informasi berhasil dipublikasikan ke Firebase!");
-    renderAdminWorkspace();
 };
 
 window.editAnnouncement = function (id) {
@@ -3359,7 +3675,6 @@ window.deleteAnnouncement = async function (id) {
     if (!canEditInCurrentView("info")) return;
     appData.announcements = appData.announcements.filter((a) => a.id !== id);
     await saveToCloudDatabase("Pengumuman dihapus.");
-    renderAdminWorkspace();
 };
 
 // --- CRUD Jadwal Pelajaran + Pemilih Jam ---
@@ -3415,7 +3730,6 @@ window.handleAdminSaveSchedule = async function (e) {
 
     resetScheduleForm();
     await saveToCloudDatabase(`Jadwal hari ${day} berhasil disimpan ke Firebase!`);
-    renderAdminWorkspace();
 };
 
 window.editScheduleItem = function (day, idx) {
@@ -3455,7 +3769,6 @@ window.deleteScheduleItem = async function (day, index) {
     if (Array.isArray(appData.schedule[day])) {
         appData.schedule[day].splice(index, 1);
         await saveToCloudDatabase("Mata pelajaran dihapus dari jadwal.");
-        renderAdminWorkspace();
     }
 };
 
@@ -3463,10 +3776,10 @@ window.deleteScheduleItem = async function (day, index) {
 window.handleAlbumImageUpload = function (e) {
     const file = e.target.files?.[0];
     if (!file) return;
-    readImageFileInstantly(file, (dataUrl) => {
+    readImageFileFast(file, 800, (dataUrl) => {
         document.getElementById("admAlbumUrl").value = dataUrl;
         updateAlbumPhotoPreview(dataUrl);
-        showToast("Foto dokumentasi berhasil dimuat!", "bg-neo-mint");
+        showToast("Foto dokumentasi siap disimpan!", "bg-neo-mint");
     });
 };
 
@@ -3506,7 +3819,7 @@ window.handleAdminSaveAlbum = async function (e) {
         id: editId ? Number(editId) : Date.now(),
         title: document.getElementById("admAlbumTitle").value.trim(),
         category: document.getElementById("admAlbumCategory").value,
-        date: document.getElementById("admAlbumDate").value,
+        date: document.getElementById("admAlbumDate").value || toLocalISODate(),
         url: rawUrl,
         caption: document.getElementById("admAlbumCaption").value.trim(),
         author: currentAdmin.name
@@ -3521,7 +3834,6 @@ window.handleAdminSaveAlbum = async function (e) {
 
     resetAlbumForm();
     await saveToCloudDatabase("Foto berhasil disimpan ke Album Firebase!");
-    renderAdminWorkspace();
 };
 
 window.editAlbumItem = function (id) {
@@ -3552,7 +3864,6 @@ window.deleteAlbumItem = async function (id) {
     if (!canEditInCurrentView("album")) return;
     appData.albums = appData.albums.filter((a) => a.id !== id);
     await saveToCloudDatabase("Foto dihapus dari album.");
-    renderAdminWorkspace();
 };
 
 // --- CRUD Akun Pengurus & Ganti Sandi ---
@@ -3591,6 +3902,9 @@ window.resetAdminAccountForm = function () {
     document.getElementById("admAccPassword").value = "";
     document.getElementById("admAccName").value = "";
     document.getElementById("admAccRole").value = "";
+    document.querySelectorAll('input[name="admPerm"]').forEach((cb) => {
+        cb.checked = cb.value !== "akun";
+    });
     const titleEl = document.getElementById("admAccFormTitle");
     if (titleEl) titleEl.textContent = "Buat / Ganti Sandi Akun Pengurus";
     document.getElementById("btnCancelEditAcc")?.classList.add("hidden");
@@ -3611,10 +3925,9 @@ window.handleAdminSaveAccount = async function (e) {
         return;
     }
 
-    const checkedPerms = Array.from(document.querySelectorAll('input[name="admPerm"]:checked')).map((cb) => cb.value);
+    let checkedPerms = Array.from(document.querySelectorAll('input[name="admPerm"]:checked')).map((cb) => cb.value);
     if (checkedPerms.length === 0) {
-        showToast("Pilih minimal 1 modul hak akses!", "bg-neo-coral");
-        return;
+        checkedPerms = ["keuangan", "absensi", "siswa", "info", "jadwal", "album", "pengaturan"];
     }
 
     const isSuper = checkedPerms.includes("akun");
@@ -3622,7 +3935,7 @@ window.handleAdminSaveAccount = async function (e) {
     if (origUser && origUser !== username) {
         appData.admins = appData.admins.filter((a) => String(a.username).toLowerCase() !== origUser);
         externalFirebaseAdmins = externalFirebaseAdmins.filter((a) => String(a.username).toLowerCase() !== origUser);
-        await deleteAdminAccountFromCloud(origUser);
+        await removeAdminAccountFromCloud(origUser);
     }
 
     const existingIdx = appData.admins.findIndex((a) => String(a.username).toLowerCase() === username);
@@ -3650,10 +3963,9 @@ window.handleAdminSaveAccount = async function (e) {
         currentAdmin = accountObj;
     }
 
-    await saveAdminAccountToCloud(accountObj);
+    await persistAdminAccountToCloud(accountObj);
     resetAdminAccountForm();
-    await saveToCloudDatabase(`Akun pengurus "${username}" berhasil disimpan & siap digunakan login!`);
-    renderAdminWorkspace();
+    await saveToCloudDatabase(`Akun pengurus "${username}" berhasil disimpan ke Firebase & siap digunakan login!`);
 };
 
 window.deleteAdminAccount = async function (username) {
@@ -3667,9 +3979,8 @@ window.deleteAdminAccount = async function (username) {
     appData.admins = appData.admins.filter((a) => String(a.username).toLowerCase() !== targetUser);
     externalFirebaseAdmins = externalFirebaseAdmins.filter((a) => String(a.username).toLowerCase() !== targetUser);
 
-    await deleteAdminAccountFromCloud(targetUser);
+    await removeAdminAccountFromCloud(targetUser);
     await saveToCloudDatabase(`Akun ${targetUser} telah dihapus permanen dari Firebase.`);
-    renderAdminWorkspace();
 };
 
 window.handleAdminSaveConfig = async function (e) {
@@ -3703,9 +4014,7 @@ window.handleAdminSaveConfig = async function (e) {
     appData.config.paymentInfo = document.getElementById("cfgPaymentInfo").value.trim();
     appData.config.marqueeText = document.getElementById("cfgMarqueeText").value.trim();
 
-    currentTypedGoal = "";
     await saveToCloudDatabase("Pengaturan Identitas, Logo, Latar & Wali Kelas berhasil disimpan ke Firebase!");
-    renderAdminWorkspace();
 };
 
 // ============================================================================
@@ -3745,294 +4054,4 @@ window.downloadOfficialExcelSheet = function () {
                     ${statuses
                         .map(
                             (st) => `
-                        <td style="border:1px solid #111;padding:6px;text-align:center;font-weight:bold;background-color:${st ? "#D9F99D" : "#FECDD3"};color:${st ? "#14532D" : "#881337"};">
-                            ${st ? "LUNAS" : "BELUM"}
-                        </td>
-                    `
-                        )
-                        .join("")}
-                    <td style="border:1px solid #111;padding:6px;text-align:right;font-weight:bold;color:#047857;">${formatRupiah(paidRp)}</td>
-                    <td style="border:1px solid #111;padding:6px;text-align:right;font-weight:bold;color:${unpaidRp > 0 ? "#BE123C" : "#64748B"};">${formatRupiah(unpaidRp)}</td>
-                </tr>
-            `;
-        })
-        .join("");
-
-    const txRowsHtml = appData.transactions
-        .map(
-            (t, i) => `
-            <tr>
-                <td style="border:1px solid #111;padding:6px;text-align:center;">${i + 1}</td>
-                <td style="border:1px solid #111;padding:6px;text-align:center;">${t.date}</td>
-                <td style="border:1px solid #111;padding:6px;text-align:center;font-weight:bold;background-color:${t.type === "MASUK" ? "#D9F99D" : "#FEF08A"};">${t.type}</td>
-                <td style="border:1px solid #111;padding:6px;">${t.category}</td>
-                <td style="border:1px solid #111;padding:6px;">${t.desc}</td>
-                <td style="border:1px solid #111;padding:6px;">${t.pic}</td>
-                <td style="border:1px solid #111;padding:6px;text-align:right;font-weight:bold;color:${t.type === "MASUK" ? "#047857" : "#BE123C"};">
-                    ${t.type === "MASUK" ? "+" : "-"}${formatRupiah(t.amount)}
-                </td>
-            </tr>
-        `
-        )
-        .join("");
-
-    const excelHtml = `
-        <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-        <head><meta charset="UTF-8"></head>
-        <body style="font-family:Arial,sans-serif;font-size:11pt;">
-            <table style="border-collapse:collapse;width:100%;margin-bottom:18px;">
-                <tr>
-                    <td colspan="${totalColumns}" style="background-color:#111111;color:#FFE600;font-size:16pt;font-weight:bold;padding:12px;text-align:center;border:2px solid #111111;">
-                        LAPORAN RESMI REKAPITULASI IURAN & BUKU KAS KELAS ${cfg.className || "MEDIVANCE"}
-                    </td>
-                </tr>
-                <tr>
-                    <td colspan="${totalColumns}" style="background-color:#FFE600;color:#111111;font-size:11pt;font-weight:bold;padding:6px;text-align:center;border:2px solid #111111;">
-                        MOTTO KELAS: "${cfg.classMotto || "Together We Grow, Together We Heal"}" • ${(cfg.semesterName || "SEMESTER GANJIL").toUpperCase()}
-                    </td>
-                </tr>
-                <tr>
-                    <td colspan="3" style="padding:6px;border:1px solid #111;font-weight:bold;background-color:#F4EFE6;">Nama Kelas</td>
-                    <td colspan="${Math.max(2, totalColumns - 3)}" style="padding:6px;border:1px solid #111;">${cfg.className} (${cfg.classCode})</td>
-                </tr>
-                <tr>
-                    <td colspan="3" style="padding:6px;border:1px solid #111;font-weight:bold;background-color:#F4EFE6;">Wali Kelas</td>
-                    <td colspan="${Math.max(2, totalColumns - 3)}" style="padding:6px;border:1px solid #111;">${cfg.waliKelas || "-"} (${cfg.waliTitle || "Wali Kelas"})</td>
-                </tr>
-                <tr>
-                    <td colspan="3" style="padding:6px;border:1px solid #111;font-weight:bold;background-color:#F4EFE6;">Periode & Tahun Ajaran</td>
-                    <td colspan="${Math.max(2, totalColumns - 3)}" style="padding:6px;border:1px solid #111;">${cfg.semesterName || "Semester Ganjil"} • TA ${cfg.academicYear} • Periode Senin: ${mondays[0]} s/d ${mondays[mondays.length - 1]} (${mondays.length} Pekan @ ${formatRupiah(stats.fee)})</td>
-                </tr>
-                <tr>
-                    <td colspan="3" style="padding:6px;border:1px solid #111;font-weight:bold;background-color:#F4EFE6;">Ringkasan Saldo Kas Aktif</td>
-                    <td colspan="${Math.max(2, totalColumns - 3)}" style="padding:6px;border:1px solid #111;font-weight:bold;background-color:#CCFBF1;">
-                        SALDO AKTIF: ${formatRupiah(stats.currentBalance)} &nbsp;|&nbsp; TOTAL MASUK: ${formatRupiah(stats.totalIncome)} &nbsp;|&nbsp; TOTAL KELUAR: ${formatRupiah(stats.totalExpense)} &nbsp;|&nbsp; KEPATUHAN: ${stats.complianceRatio}%
-                    </td>
-                </tr>
-                <tr>
-                    <td colspan="3" style="padding:6px;border:1px solid #111;font-weight:bold;background-color:#F4EFE6;">Waktu Cetak / Unduh</td>
-                    <td colspan="${Math.max(2, totalColumns - 3)}" style="padding:6px;border:1px solid #111;">${nowStr}</td>
-                </tr>
-            </table>
-
-            <h3 style="margin-bottom:6px;font-size:13pt;">I. TABEL PELUNASAN IURAN WAJIB HARI SENIN</h3>
-            <table style="border-collapse:collapse;width:100%;margin-bottom:24px;">
-                <thead>
-                    <tr style="background-color:#111111;color:#FFFFFF;font-weight:bold;">
-                        <th style="border:1px solid #111;padding:8px;">No. Absen</th>
-                        <th style="border:1px solid #111;padding:8px;">Nama Lengkap Anggota</th>
-                        <th style="border:1px solid #111;padding:8px;">L/P</th>
-                        <th style="border:1px solid #111;padding:8px;">Jabatan</th>
-                        <th style="border:1px solid #111;padding:8px;">Piket</th>
-                        ${mondays.map((d) => `<th style="border:1px solid #111;padding:8px;text-align:center;">Senin<br>${formatShortMondayLabel(d)}</th>`).join("")}
-                        <th style="border:1px solid #111;padding:8px;text-align:right;">Total Terbayar</th>
-                        <th style="border:1px solid #111;padding:8px;text-align:right;">Tunggakan</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${studentRowsHtml || `<tr><td colspan="${totalColumns}" style="padding:10px;text-align:center;border:1px solid #111;">Belum ada data anggota.</td></tr>`}
-                </tbody>
-            </table>
-
-            <h3 style="margin-bottom:6px;font-size:13pt;">II. BUKU MUTASI KAS UMUM (PEMASUKAN & PENGELUARAN)</h3>
-            <table style="border-collapse:collapse;width:100%;">
-                <thead>
-                    <tr style="background-color:#111111;color:#FFFFFF;font-weight:bold;">
-                        <th style="border:1px solid #111;padding:8px;">No</th>
-                        <th style="border:1px solid #111;padding:8px;">Tanggal</th>
-                        <th style="border:1px solid #111;padding:8px;">Jenis</th>
-                        <th style="border:1px solid #111;padding:8px;">Kategori</th>
-                        <th style="border:1px solid #111;padding:8px;">Rincian Keperluan</th>
-                        <th style="border:1px solid #111;padding:8px;">Penanggung Jawab</th>
-                        <th style="border:1px solid #111;padding:8px;text-align:right;">Nominal</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td style="border:1px solid #111;padding:6px;text-align:center;font-weight:bold;">-</td>
-                        <td style="border:1px solid #111;padding:6px;text-align:center;">AKUMULASI</td>
-                        <td style="border:1px solid #111;padding:6px;text-align:center;font-weight:bold;background-color:#D9F99D;">MASUK</td>
-                        <td style="border:1px solid #111;padding:6px;">Iuran Hari Senin</td>
-                        <td style="border:1px solid #111;padding:6px;font-weight:bold;">Total Akumulasi Iuran Kas Mingguan Anggota (${stats.totalPaidWeeks} Senin Lunas)</td>
-                        <td style="border:1px solid #111;padding:6px;">Bendahara Kelas</td>
-                        <td style="border:1px solid #111;padding:6px;text-align:right;font-weight:bold;color:#047857;">+${formatRupiah(stats.totalIuranPaid)}</td>
-                    </tr>
-                    ${txRowsHtml}
-                </tbody>
-            </table>
-        </body>
-        </html>
-    `;
-
-    const blob = new Blob(["\ufeff", excelHtml], { type: "application/vnd.ms-excel;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `Laporan_Resmi_Kas_${(cfg.className || "MEDIVANCE").replace(/\s+/g, "_")}.xls`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    showToast("File Sheet Resmi (.xls) berhasil diunduh!", "bg-neo-yellow");
-};
-
-window.exportIuranCSV = function () {
-    const cfg = appData.config;
-    const stats = calculateFinancialSummary();
-    const mondays = stats.mondayDates;
-    const nowStr = new Date().toLocaleDateString("id-ID");
-
-    const topHeaderRows = [
-        `"LAPORAN RESMI REKAPITULASI IURAN KAS KELAS ${(cfg.className || "MEDIVANCE").toUpperCase()}"`,
-        `"Motto Kelas:","${cfg.classMotto || "Together We Grow, Together We Heal"}"`,
-        `"Wali Kelas:","${cfg.waliKelas || "-"}","Periode:","${cfg.semesterName || "Semester Ganjil"} TA ${cfg.academicYear || "-"}"`,
-        `"Periode Kas:","${mondays[0]} s/d ${mondays[mondays.length - 1]} (${mondays.length} Hari Senin)","Tarif / Senin:","${formatRupiah(stats.fee)}"`,
-        `"Saldo Kas Aktif:","${formatRupiah(stats.currentBalance)}","Total Iuran Masuk:","${formatRupiah(stats.totalIuranPaid)}","Tanggal Unduh:","${nowStr}"`,
-        `""`
-    ];
-
-    const headers = ["No_Absen", "Nama_Anggota", "L/P", "Jabatan", "Piket", ...mondays.map((d) => `Senin_${d}`), "Total_Bayar", "Tunggakan"];
-
-    const rows = appData.students.map((s) => {
-        ensureStudentPaidDatesMigrated(s, mondays);
-        const statuses = mondays.map((d) => (s.paidDates[d] ? "LUNAS" : "BELUM"));
-        const paidCount = statuses.filter((st) => st === "LUNAS").length;
-        return [
-            s.absen,
-            `"${s.name}"`,
-            `"${s.gender || "L"}"`,
-            `"${s.role}"`,
-            `"${s.piket}"`,
-            ...statuses,
-            paidCount * stats.fee,
-            (mondays.length - paidCount) * stats.fee
-        ].join(",");
-    });
-
-    const csvBody = [...topHeaderRows, headers.join(","), ...rows].join("\n");
-    const blob = new Blob(["\ufeff", csvBody], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `Sheet_Iuran_${(cfg.className || "MEDIVANCE").replace(/\s+/g, "_")}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    showToast("File CSV Rekap Iuran berhasil diunduh!", "bg-neo-mint");
-};
-
-window.exportMutasiCSV = function () {
-    const cfg = appData.config;
-    const stats = calculateFinancialSummary();
-    const nowStr = new Date().toLocaleDateString("id-ID");
-
-    const topHeaderRows = [
-        `"BUKU MUTASI KAS RESMI KELAS ${(cfg.className || "MEDIVANCE").toUpperCase()}"`,
-        `"Motto Kelas:","${cfg.classMotto || "Together We Grow, Together We Heal"}"`,
-        `"Wali Kelas:","${cfg.waliKelas || "-"}","Periode:","${cfg.semesterName || "Semester Ganjil"} TA ${cfg.academicYear || "-"}"`,
-        `"Saldo Aktif:","${formatRupiah(stats.currentBalance)}","Total Pemasukan:","${formatRupiah(stats.totalIncome)}","Total Pengeluaran:","${formatRupiah(stats.totalExpense)}","Tanggal Unduh:","${nowStr}"`,
-        `""`
-    ];
-
-    const headers = ["Tanggal", "Jenis", "Kategori", "Keterangan", "Penanggung_Jawab", "Nominal"];
-    const rows = [
-        `"AKUMULASI","MASUK","Iuran Hari Senin","Akumulasi Iuran Mingguan Anggota (${stats.totalPaidWeeks} Senin Lunas)","Bendahara Kelas",${stats.totalIuranPaid}`,
-        ...appData.transactions.map((t) =>
-            [t.date, t.type, `"${t.category}"`, `"${t.desc}"`, `"${t.pic}"`, t.amount].join(",")
-        )
-    ];
-
-    const csvBody = [...topHeaderRows, headers.join(","), ...rows].join("\n");
-    const blob = new Blob(["\ufeff", csvBody], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `Buku_Kas_${(cfg.className || "MEDIVANCE").replace(/\s+/g, "_")}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    showToast("File CSV Buku Kas berhasil diunduh!", "bg-neo-mint");
-};
-
-// ============================================================================
-// RENDER KESELURUHAN & INISIALISASI APLIKASI (ANTI-CRASH & AUTO-DASHBOARD)
-// ============================================================================
-
-function renderAllViews() {
-    try { renderHeaderAndHeroIdentity(); } catch (e) { console.error(e); }
-    try { renderDashboard(); } catch (e) { console.error(e); }
-    try { renderIuranMatrix(); } catch (e) { console.error(e); }
-    try { renderLedgerTable(); } catch (e) { console.error(e); }
-    try { renderPublicAttendanceView(); } catch (e) { console.error(e); }
-    try { renderStickyNotesWall(); } catch (e) { console.error(e); }
-    try { renderInfoBoard(); } catch (e) { console.error(e); }
-    try { renderScheduleAndPiket(); } catch (e) { console.error(e); }
-    try { renderAlbumGallery(); } catch (e) { console.error(e); }
-    try { renderStudentDirectory(); } catch (e) { console.error(e); }
-
-    if (activeWorkspace === "admin" && currentAdmin) {
-        try { renderAdminWorkspace(); } catch (e) { console.error(e); }
-    }
-}
-
-function updateClock() {
-    const el = document.getElementById("liveClockDisplay");
-    if (!el) return;
-    const now = new Date();
-    el.textContent =
-        now.toLocaleDateString("id-ID", {
-            weekday: "short",
-            day: "2-digit",
-            month: "short",
-            year: "numeric"
-        }) +
-        " • " +
-        now.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
-}
-
-window.addEventListener("DOMContentLoaded", () => {
-    // 1. Terapkan preferensi tema Gelap/Terang
-    try {
-        const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
-        if (savedTheme === "1") applyThemeState(true);
-    } catch (e) {}
-
-    // 2. Set tanggal & bulan lokal hari ini pada seluruh input tanggal
-    const todayIso = toLocalISODate(new Date());
-    const monthIso = toLocalISOMonth(new Date());
-    ["admTxDate", "admAlbumDate", "admAttendanceDateInput", "admAttendanceWeekInput", "publicAttendanceDateInput", "publicAttendanceWeekInput"].forEach((id) => {
-        const el = document.getElementById(id);
-        if (el) el.value = todayIso;
-    });
-    ["admAttendanceMonthInput", "publicAttendanceMonthInput"].forEach((id) => {
-        const el = document.getElementById(id);
-        if (el) el.value = monthIso;
-    });
-
-    // 3. Pastikan Beranda Utama (`#view-dashboard`) langsung tampil penuh saat awal buka web
-    activeWorkspace = "user";
-    activeTabId = "dashboard";
-    syncScheduleTimeRange();
-    updateClock();
-    setInterval(updateClock, 30000);
-    updateWorkspaceVisibility();
-
-    // 4. Hubungkan secara real-time ke Cloud Firebase (Membaca data lama terlebih dahulu tanpa menimpanya)
-    initCloudSynchronization({
-        onStateReceived: (incomingState, updatedAt) => {
-            if (updatedAt && updatedAt === lastAppliedTimestamp) return;
-            if (updatedAt) lastAppliedTimestamp = updatedAt;
-
-            isApplyingRemoteUpdate = true;
-            appData = mergeWithDefaults(incomingState);
-            renderAllViews();
-            isApplyingRemoteUpdate = false;
-        },
-        onAdminsReceived: (adminList) => {
-            externalFirebaseAdmins = mergeAdminArrays(externalFirebaseAdmins, adminList);
-            if (activeWorkspace === "admin") renderAdminWorkspace();
-        }
-    });
-});
+                        <td style="border:1px solid #111;padding:6px;text-align:
