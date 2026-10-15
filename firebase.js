@@ -1,5 +1,5 @@
 // ============================================================================
-// FIREBASE.JS — MESIN CLOUD REAL-TIME (RTDB ASIA-SOUTHEAST1 + FIRESTORE CHUNKS)
+// FIREBASE.JS — MESIN CLOUD PUBLIK REAL-TIME (ANTI-OVERWRITE & MULTI-DEVICE)
 // ============================================================================
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
@@ -55,7 +55,8 @@ isSupported()
     })
     .catch(() => {});
 
-const APP_ID_SLUG = typeof __app_id !== "undefined" ? __app_id : "portal-kelas-utama";
+// Gunakan satu ID tetap agar semua perangkat (HP/Laptop) selalu mengarah ke alamat data yang sama persis
+const APP_ID_SLUG = "portal-kelas-utama";
 
 // Jalur Penyimpanan Cloud Firestore (Root & Artifacts)
 const FS_ROOT_MAIN_DOC = doc(db, "portal_kelas_store", "main_state");
@@ -68,8 +69,43 @@ const FS_ART_ADMINS_COL = ["artifacts", APP_ID_SLUG, "public", "data", "admins"]
 const RTDB_MAIN_PATH = `portal_kelas/${APP_ID_SLUG}/main_state`;
 const RTDB_ADMINS_PATH = `portal_kelas/${APP_ID_SLUG}/admins`;
 
-// Batas aman per chunk dokumen Firestore (650 KB agar di bawah limit 1 MB Firestore)
+// Batas aman per chunk dokumen Firestore (650 KB)
 const CHUNK_SIZE_LIMIT = 650000;
+
+// Pelacak waktu data terbaru agar listener yang lebih tua tidak pernah menimpa data baru
+let highestTimestampReceived = "";
+
+/**
+ * Menghitung skor kelengkapan isi data (mencegah state kosong menimpa state berisi data)
+ */
+function calculateDataRichness(stateObj) {
+    if (!stateObj || typeof stateObj !== "object") return 0;
+    const stuCount = Array.isArray(stateObj.students) ? stateObj.students.length : 0;
+    const txCount = Array.isArray(stateObj.transactions) ? stateObj.transactions.length : 0;
+    const annCount = Array.isArray(stateObj.announcements) ? stateObj.announcements.length : 0;
+    const albCount = Array.isArray(stateObj.albums) ? stateObj.albums.length : 0;
+    const noteCount = Array.isArray(stateObj.stickyNotes) ? stateObj.stickyNotes.length : 0;
+    const attCount = stateObj.attendance && typeof stateObj.attendance === "object" ? Object.keys(stateObj.attendance).length : 0;
+    return stuCount * 10 + txCount * 5 + annCount * 5 + albCount * 5 + noteCount * 2 + attCount * 3;
+}
+
+/**
+ * Filter pengirim state ke UI: hanya meneruskan jika timestamp lebih baru
+ */
+function deliverStateIfNewest(onStateReceived, stateObj, updatedAt, source) {
+    if (!stateObj || typeof stateObj !== "object") return;
+    const incomingTs = String(updatedAt || "");
+
+    if (incomingTs && highestTimestampReceived && incomingTs < highestTimestampReceived) {
+        return; // Abaikan data dari jalur lain yang memiliki timestamp lebih lama
+    }
+
+    if (incomingTs) {
+        highestTimestampReceived = incomingTs;
+    }
+
+    onStateReceived(stateObj, incomingTs || new Date().toISOString(), source);
+}
 
 /**
  * Normalisasi data akun pengurus dari koleksi Firebase
@@ -96,7 +132,7 @@ export function parseAdminRecord(id, data) {
 }
 
 /**
- * Memastikan sesi otentikasi siap sebelum baca/tulis ke Cloud
+ * Mencoba mengaktifkan sesi anonim jika tersedia, namun TIDAK menghalangi akses publik jika gagal
  */
 export async function ensureAuthReady() {
     try {
@@ -108,7 +144,7 @@ export async function ensureAuthReady() {
             await signInAnonymously(auth);
         }
     } catch (e) {
-        // Tetap lanjutkan jika Anonymous Auth dinonaktifkan di konsol Firebase
+        // Tetap lanjutkan tanpa login (Web Publik diizinkan oleh Rules)
     }
 }
 
@@ -153,8 +189,7 @@ async function parseFirestoreSnapshot(snapshot, chunkColPath) {
 }
 
 /**
- * Mengambil state terbaru dari seluruh jalur Firebase saat aplikasi pertama kali dibuka
- * (Mencegah data lama tertimpa saat halaman baru dimuat)
+ * Mengambil state terbaru dari seluruh jalur Firebase saat perangkat baru membuka web
  */
 export async function fetchInitialPortalStateFromCloud() {
     await ensureAuthReady();
@@ -167,7 +202,11 @@ export async function fetchInitialPortalStateFromCloud() {
             const val = rtSnap.val();
             if (val && val.payload) {
                 const parsed = typeof val.payload === "string" ? JSON.parse(val.payload) : val.payload;
-                candidates.push({ state: parsed, updatedAt: val.updatedAt || "1970-01-01T00:00:00.000Z" });
+                candidates.push({
+                    state: parsed,
+                    updatedAt: val.updatedAt || "1970-01-01T00:00:00.000Z",
+                    richness: calculateDataRichness(parsed)
+                });
             }
         }
     } catch (e) {}
@@ -176,20 +215,37 @@ export async function fetchInitialPortalStateFromCloud() {
     try {
         const rootSnap = await getDoc(FS_ROOT_MAIN_DOC);
         const res = await parseFirestoreSnapshot(rootSnap, FS_ROOT_CHUNKS_COL);
-        if (res) candidates.push(res);
+        if (res && res.state) {
+            candidates.push({
+                state: res.state,
+                updatedAt: res.updatedAt || "1970-01-01T00:00:00.000Z",
+                richness: calculateDataRichness(res.state)
+            });
+        }
     } catch (e) {}
 
     // 3. Cek dari Firestore Artifacts Collection
     try {
         const artSnap = await getDoc(FS_ART_MAIN_DOC);
         const res = await parseFirestoreSnapshot(artSnap, FS_ART_CHUNKS_COL);
-        if (res) candidates.push(res);
+        if (res && res.state) {
+            candidates.push({
+                state: res.state,
+                updatedAt: res.updatedAt || "1970-01-01T00:00:00.000Z",
+                richness: calculateDataRichness(res.state)
+            });
+        }
     } catch (e) {}
 
     if (candidates.length === 0) return null;
 
-    // Pilih data dengan timestamp updatedAt paling baru
-    candidates.sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+    // Urutkan berdasarkan waktu terbaru; jika waktu sama, pilih yang datanya paling lengkap
+    candidates.sort((a, b) => {
+        const timeCmp = String(b.updatedAt).localeCompare(String(a.updatedAt));
+        if (timeCmp !== 0) return timeCmp;
+        return b.richness - a.richness;
+    });
+
     return candidates[0];
 }
 
@@ -200,7 +256,6 @@ export async function fetchAllAdminsFromCloud() {
     await ensureAuthReady();
     const collected = [];
 
-    // 1. Dari Realtime Database
     try {
         const rtSnap = await dbGet(dbRef(rtdb, RTDB_ADMINS_PATH));
         if (rtSnap.exists()) {
@@ -212,7 +267,6 @@ export async function fetchAllAdminsFromCloud() {
         }
     } catch (e) {}
 
-    // 2. Dari Firestore Artifacts
     try {
         const snap = await getDocs(collection(db, ...FS_ART_ADMINS_COL));
         snap.forEach((d) => {
@@ -221,7 +275,6 @@ export async function fetchAllAdminsFromCloud() {
         });
     } catch (e) {}
 
-    // 3. Dari Root Collections Firestore (`admins`, `admin`, `users`)
     for (const colName of ["admins", "admin", "users"]) {
         try {
             const snap = await getDocs(collection(db, colName));
@@ -236,17 +289,17 @@ export async function fetchAllAdminsFromCloud() {
 }
 
 /**
- * Inisialisasi Listener Real-Time (Setiap perubahan di Admin langsung tampil di semua HP/Perangkat)
+ * Inisialisasi Listener Real-Time Lintas Perangkat (Berjalan untuk Pengunjung Publik & Admin)
  */
 export async function initCloudSynchronization({ onStateReceived, onAdminsReceived, onConnectionStatus }) {
     await ensureAuthReady();
 
-    // 1. Tarik data awal terlebih dahulu sebelum mengaktifkan listener
+    // 1. Tarik data awal yang paling baru terlebih dahulu
     try {
         const initial = await fetchInitialPortalStateFromCloud();
         if (initial && initial.state) {
             if (onConnectionStatus) onConnectionStatus(true);
-            onStateReceived(initial.state, initial.updatedAt, "initial-fetch");
+            deliverStateIfNewest(onStateReceived, initial.state, initial.updatedAt, "initial-fetch");
         }
     } catch (e) {}
 
@@ -261,11 +314,13 @@ export async function initCloudSynchronization({ onStateReceived, onAdminsReceiv
                 if (val && val.payload) {
                     try {
                         const parsed = typeof val.payload === "string" ? JSON.parse(val.payload) : val.payload;
-                        onStateReceived(parsed, val.updatedAt || "", "rtdb");
+                        deliverStateIfNewest(onStateReceived, parsed, val.updatedAt || "", "rtdb");
                     } catch (err) {}
                 }
             },
-            () => {}
+            (err) => {
+                console.warn("RTDB Read Warning:", err?.message || err);
+            }
         );
     } catch (e) {}
 
@@ -277,10 +332,12 @@ export async function initCloudSynchronization({ onStateReceived, onAdminsReceiv
                 const res = await parseFirestoreSnapshot(snap, FS_ROOT_CHUNKS_COL);
                 if (res && res.state) {
                     if (onConnectionStatus) onConnectionStatus(true);
-                    onStateReceived(res.state, res.updatedAt, "firestore-root");
+                    deliverStateIfNewest(onStateReceived, res.state, res.updatedAt, "firestore-root");
                 }
             },
-            () => {}
+            (err) => {
+                console.warn("Firestore Root Read Warning:", err?.message || err);
+            }
         );
     } catch (e) {}
 
@@ -292,14 +349,16 @@ export async function initCloudSynchronization({ onStateReceived, onAdminsReceiv
                 const res = await parseFirestoreSnapshot(snap, FS_ART_CHUNKS_COL);
                 if (res && res.state) {
                     if (onConnectionStatus) onConnectionStatus(true);
-                    onStateReceived(res.state, res.updatedAt, "firestore-art");
+                    deliverStateIfNewest(onStateReceived, res.state, res.updatedAt, "firestore-art");
                 }
             },
-            () => {}
+            (err) => {
+                console.warn("Firestore Artifacts Read Warning:", err?.message || err);
+            }
         );
     } catch (e) {}
 
-    // 5. Listener Real-Time: Koleksi Akun Pengurus (RTDB & Firestore)
+    // 5. Listener Real-Time: Koleksi Akun Pengurus
     try {
         onValue(
             dbRef(rtdb, RTDB_ADMINS_PATH),
@@ -392,18 +451,16 @@ async function writeToFirestorePath(mainDocRef, chunkColPath, serialized, timest
 export async function savePortalStateToCloud(appData, actorUsername = "admin") {
     await ensureAuthReady();
     const timestamp = new Date().toISOString();
+    highestTimestampReceived = timestamp;
     const serialized = JSON.stringify(appData);
 
     const results = await Promise.allSettled([
-        // 1. Simpan ke Realtime Database (Bebas batas dokumen 1MB, sangat cepat)
         dbSet(dbRef(rtdb, RTDB_MAIN_PATH), {
             payload: serialized,
             updatedAt: timestamp,
             updatedBy: actorUsername
         }),
-        // 2. Simpan ke Firestore Root
         writeToFirestorePath(FS_ROOT_MAIN_DOC, FS_ROOT_CHUNKS_COL, serialized, timestamp, actorUsername),
-        // 3. Simpan ke Firestore Artifacts
         writeToFirestorePath(FS_ART_MAIN_DOC, FS_ART_CHUNKS_COL, serialized, timestamp, actorUsername)
     ]);
 
