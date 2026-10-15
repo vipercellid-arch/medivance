@@ -1,5 +1,5 @@
 // ============================================================================
-// KELAS.JS — LOGIKA UTAMA PORTAL KELAS, ABSENSI DIGITAL & ARSIP SEMESTER BARU
+// KELAS.JS — LOGIKA UTAMA PORTAL KELAS, ABSENSI (H/M/B) & ARSIP SEMESTER BARU
 // ============================================================================
 
 import {
@@ -16,13 +16,19 @@ const THEME_STORAGE_KEY = "medivance_theme_mode";
 const DEFAULT_HERO_BG = "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&w=1400&q=80";
 
 /**
- * Format Tanggal Lokal (YYYY-MM-DD) bebas bug pergeseran zona waktu
+ * Format Tanggal Lokal (YYYY-MM-DD) & Bulan Lokal (YYYY-MM)
  */
 function toLocalISODate(dateObj = new Date()) {
     const yyyy = dateObj.getFullYear();
     const mm = String(dateObj.getMonth() + 1).padStart(2, "0");
     const dd = String(dateObj.getDate()).padStart(2, "0");
     return `${yyyy}-${mm}-${dd}`;
+}
+
+function toLocalISOMonth(dateObj = new Date()) {
+    const yyyy = dateObj.getFullYear();
+    const mm = String(dateObj.getMonth() + 1).padStart(2, "0");
+    return `${yyyy}-${mm}`;
 }
 
 function getDefaultMondayRange() {
@@ -41,7 +47,7 @@ function getDefaultMondayRange() {
 
 const defaultRange = getDefaultMondayRange();
 
-// STATE AWAL DEFAULT (MURNI CLOUD — TIDAK DISIMPAN DI LOCALSTORAGE)
+// STATE DEFAULT AWAL
 const DEFAULT_DATABASE_STATE = {
     config: {
         classCode: "MDV",
@@ -81,7 +87,7 @@ const DEFAULT_DATABASE_STATE = {
     albums: [],
     stickyNotes: [],
     attendance: {}, // { "YYYY-MM-DD": { [studentId]: { status: "H"|"I"|"S"|"A", note: "" } } }
-    archives: [],   // Daftar arsip semester lalu
+    archives: [],   // Brankas arsip semester terdahulu
     schedule: {
         "Senin": [],
         "Selasa": [],
@@ -92,21 +98,29 @@ const DEFAULT_DATABASE_STATE = {
     }
 };
 
-// State Aktif di Memori (100% disinkronkan dari Firebase)
+// State Aplikasi Aktif
 let appData = JSON.parse(JSON.stringify(DEFAULT_DATABASE_STATE));
 let externalFirebaseAdmins = [];
 let currentAdmin = null;
 
-// Mode Tampilan: 'user' | 'login' | 'admin' | 'preview'
-let activeWorkspace = "user";
+// Navigasi Workspace & Tab
+let activeWorkspace = "user"; // 'user' | 'login' | 'admin' | 'preview'
 let activeTabId = "dashboard";
 let activeAdminSectionId = "adm-keuangan";
 let activeInfoCategory = "ALL";
 let activeAlbumCategory = "ALL";
 let activeScheduleDay = "ALL";
 
-let selectedAttendanceDate = toLocalISODate(new Date());
+// State Filter Absensi Digital (Harian, Mingguan, Bulanan)
+let publicAttendanceMode = "DAILY"; // 'DAILY' | 'WEEKLY' | 'MONTHLY'
 let selectedPublicAttendanceDate = toLocalISODate(new Date());
+let selectedPublicAttendanceWeek = toLocalISODate(new Date());
+let selectedPublicAttendanceMonth = toLocalISOMonth(new Date());
+
+let adminAttendanceMode = "DAILY"; // 'DAILY' | 'WEEKLY' | 'MONTHLY'
+let selectedAttendanceDate = toLocalISODate(new Date());
+let selectedAttendanceWeek = toLocalISODate(new Date());
+let selectedAttendanceMonth = toLocalISOMonth(new Date());
 
 let selectedStudentIdForCard = null;
 let lastAddedStickyId = null;
@@ -118,10 +132,9 @@ let secretTapCount = 0;
 let secretTapTimer = null;
 let typewriterTimer = null;
 let currentTypedGoal = "";
-let scrollObserver = null;
 
 // ============================================================================
-// SINKRONISASI DATA LANGSUNG KE FIREBASE (TANPA LOCALSTORAGE DATA)
+// SINKRONISASI REAL-TIME FIREBASE & MERGE DATA AMAN
 // ============================================================================
 
 function mergeWithDefaults(incoming) {
@@ -129,14 +142,18 @@ function mergeWithDefaults(incoming) {
         return JSON.parse(JSON.stringify(DEFAULT_DATABASE_STATE));
     }
     const mergedCfg = { ...DEFAULT_DATABASE_STATE.config, ...(incoming.config || {}) };
-    if (!mergedCfg.heroBgUrl || !mergedCfg.heroBgUrl.trim()) {
+    if (!mergedCfg.heroBgUrl || !String(mergedCfg.heroBgUrl).trim()) {
         mergedCfg.heroBgUrl = DEFAULT_HERO_BG;
     }
+
+    // Pastikan akun admin default tetap ada jika list kosong, namun utamakan akun yang dibuat/diubah di Cloud
+    const incomingAdmins = Array.isArray(incoming.admins) && incoming.admins.length > 0
+        ? incoming.admins
+        : DEFAULT_DATABASE_STATE.admins;
+
     return {
         config: mergedCfg,
-        admins: Array.isArray(incoming.admins) && incoming.admins.length > 0
-            ? incoming.admins
-            : DEFAULT_DATABASE_STATE.admins,
+        admins: incomingAdmins,
         students: Array.isArray(incoming.students) ? incoming.students : [],
         transactions: Array.isArray(incoming.transactions) ? incoming.transactions : [],
         announcements: Array.isArray(incoming.announcements) ? incoming.announcements : [],
@@ -150,27 +167,29 @@ function mergeWithDefaults(incoming) {
 
 function mergeAdminArrays(arr1, arr2) {
     const map = new Map();
+    // Masukkan arr1 dulu, lalu arr2 menimpa jika username sama
     [...(arr1 || []), ...(arr2 || [])].forEach((item) => {
         if (item && item.username) {
-            map.set(String(item.username).toLowerCase(), item);
+            const key = String(item.username).trim().toLowerCase();
+            map.set(key, {
+                ...item,
+                username: key,
+                email: item.email || (key.includes("@") ? key : `${key}@kelas.id`)
+            });
         }
     });
     return Array.from(map.values());
 }
 
 function getAllCombinedAdmins() {
-    return mergeAdminArrays(appData.admins, externalFirebaseAdmins);
+    // appData.admins diletakkan kedua agar perubahan sandi di state utama selalu menang
+    return mergeAdminArrays(externalFirebaseAdmins, appData.admins);
 }
 
 /**
- * Fungsi Utama Simpan Otomatis ke Firebase setiap kali tombol Simpan ditekan
+ * Menyimpan seluruh perubahan langsung ke Cloud Firebase secara Real-Time
  */
-async function saveToCloudDatabase(customSuccessMsg = "") {
-    // Hapus sisa localStorage lama jika pernah ada agar murni 100% Cloud
-    try {
-        localStorage.removeItem("medivance_portal_state_v3");
-    } catch (e) {}
-
+async function saveToCloudDatabase(successMessage = "") {
     renderAllViews();
     if (isApplyingRemoteUpdate) return true;
 
@@ -179,22 +198,26 @@ async function saveToCloudDatabase(customSuccessMsg = "") {
         statusBadge.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin text-neo-yellow"></i> Menyimpan ke Firebase...`;
     }
 
-    const ok = await savePortalStateToCloud(appData, currentAdmin ? currentAdmin.username : "visitor");
+    const res = await savePortalStateToCloud(appData, currentAdmin ? currentAdmin.username : "visitor");
+    if (res && res.updatedAt) {
+        lastAppliedTimestamp = res.updatedAt;
+    }
 
     if (statusBadge) {
-        if (ok) {
+        if (res && res.ok) {
             statusBadge.innerHTML = `<i class="fa-solid fa-cloud-check text-neo-mint"></i> Tersimpan di Firebase`;
         } else {
-            statusBadge.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-neo-coral"></i> Gagal Simpan Cloud`;
+            statusBadge.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-neo-coral"></i> Cek Koneksi`;
         }
     }
 
-    if (!ok) {
-        showToast("Peringatan: Koneksi ke Firebase terganggu, periksa jaringan internet Anda.", "bg-neo-coral");
-    } else if (customSuccessMsg) {
-        showToast(customSuccessMsg, "bg-neo-mint");
+    if (res && res.ok) {
+        if (successMessage) showToast(successMessage, "bg-neo-mint");
+        return true;
+    } else {
+        showToast("Gagal menyimpan ke Firebase. Periksa koneksi internet atau aturan database Firebase Anda.", "bg-neo-coral");
+        return false;
     }
-    return ok;
 }
 
 // ============================================================================
@@ -221,466 +244,6 @@ function hasAdminPermission(permKey) {
     }
     return perms.includes(permKey);
 }
-
-// ============================================================================
-// UPGRADE STRUKTUR DOM OTOMATIS (ABSENSI DIGITAL, DRAWER ADMIN & SEMESTER BARU)
-// ============================================================================
-
-function upgradeDOMStructure() {
-    // 1. Tambahkan tombol "Absensi Digital" di Drawer Publik
-    const publicNav = document.querySelector("#navDrawerPanel nav");
-    if (publicNav && !document.getElementById("drawertab-absensi")) {
-        const jadwalBtn = document.getElementById("drawertab-jadwal");
-        const absenBtn = document.createElement("button");
-        absenBtn.type = "button";
-        absenBtn.id = "drawertab-absensi";
-        absenBtn.className = "drawer-nav-item neo-btn bg-white text-neo-ink w-full justify-start px-3.5 py-2.5 text-xs sm:text-sm";
-        absenBtn.setAttribute("onclick", "navigateFromDrawer('absensi')");
-        absenBtn.innerHTML = `
-            <span class="w-6 text-center"><i class="fa-solid fa-user-check text-emerald-500"></i></span>
-            <span class="flex-1 text-left">Absensi Digital</span>
-            <span id="badgeAbsensiCount" class="bg-neo-lime text-neo-ink border border-neo-ink rounded px-1.5 text-[10px]">HARI INI</span>
-        `;
-        if (jadwalBtn) {
-            publicNav.insertBefore(absenBtn, jadwalBtn);
-        } else {
-            publicNav.appendChild(absenBtn);
-        }
-    }
-
-    // 2. Buat View Publik `#view-absensi` di `#workspace-user`
-    const userWorkspace = document.getElementById("workspace-user");
-    if (userWorkspace && !document.getElementById("view-absensi")) {
-        const absensiSec = document.createElement("section");
-        absensiSec.id = "view-absensi";
-        absensiSec.className = "hidden space-y-6";
-        absensiSec.innerHTML = `
-            <div class="neo-card kpi-accent-card bg-neo-lime text-neo-ink p-5 sm:p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 reveal-on-scroll">
-                <div>
-                    <div class="flex flex-wrap items-center gap-2 mb-1.5">
-                        <span class="neo-badge bg-white text-neo-ink"><i class="fa-solid fa-clipboard-user"></i> KEHADIRAN HARIAN SISWA</span>
-                        <span id="publicAbsensiSemesterBadge" class="neo-badge bg-neo-ink text-white font-mono">SEMESTER AKTIF</span>
-                    </div>
-                    <h2 class="font-display font-extrabold text-xl sm:text-2xl uppercase">Absensi Digital & Rekap Kehadiran Kelas</h2>
-                    <p class="text-xs sm:text-sm font-semibold opacity-90 mt-0.5">
-                        Pantau kehadiran harian anggota kelas beserta persentase kumulatif kehadiran semester berjalan.
-                    </p>
-                </div>
-                <div class="flex flex-wrap items-center gap-2">
-                    <input
-                        type="date"
-                        id="publicAttendanceDateInput"
-                        onchange="handlePublicAttendanceDateChange(this.value)"
-                        class="neo-input px-3 py-2 text-xs font-mono bg-white text-neo-ink"
-                    >
-                    <button onclick="downloadAttendanceExcelSheet()" class="neo-btn bg-neo-yellow text-neo-ink px-3.5 py-2 text-xs">
-                        <i class="fa-solid fa-file-excel"></i> Unduh Rekap Absen (.xls)
-                    </button>
-                </div>
-            </div>
-
-            <!-- 4 KPI Kehadiran Hari Terpilih -->
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
-                <div class="neo-card bg-neo-lime p-4 text-neo-ink">
-                    <span class="font-mono text-[10px] font-extrabold uppercase bg-white px-2 py-0.5 rounded border border-neo-ink">HADIR (H)</span>
-                    <div id="pubAttCountH" class="font-mono font-extrabold text-2xl sm:text-3xl mt-1">0</div>
-                    <p class="text-[11px] font-bold opacity-80">Anggota hadir</p>
-                </div>
-                <div class="neo-card bg-neo-sky p-4 text-neo-ink">
-                    <span class="font-mono text-[10px] font-extrabold uppercase bg-white px-2 py-0.5 rounded border border-neo-ink">IZIN (I)</span>
-                    <div id="pubAttCountI" class="font-mono font-extrabold text-2xl sm:text-3xl mt-1">0</div>
-                    <p class="text-[11px] font-bold opacity-80">Izin tertulis</p>
-                </div>
-                <div class="neo-card bg-neo-yellow p-4 text-neo-ink">
-                    <span class="font-mono text-[10px] font-extrabold uppercase bg-white px-2 py-0.5 rounded border border-neo-ink">SAKIT (S)</span>
-                    <div id="pubAttCountS" class="font-mono font-extrabold text-2xl sm:text-3xl mt-1">0</div>
-                    <p class="text-[11px] font-bold opacity-80">Istirahat sakit</p>
-                </div>
-                <div class="neo-card bg-neo-coral p-4 text-white">
-                    <span class="font-mono text-[10px] font-extrabold uppercase bg-white text-neo-ink px-2 py-0.5 rounded border border-neo-ink">ALFA (A)</span>
-                    <div id="pubAttCountA" class="font-mono font-extrabold text-2xl sm:text-3xl mt-1">0</div>
-                    <p class="text-[11px] font-bold opacity-90">Tanpa keterangan</p>
-                </div>
-            </div>
-
-            <!-- Tabel Absensi Harian & Kumulatif (Read-Only di Publik) -->
-            <div class="neo-card bg-white p-4 sm:p-6 space-y-4">
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b-3 border-neo-ink">
-                    <div>
-                        <h3 class="font-display font-extrabold text-lg uppercase">Daftar Kehadiran Anggota Kelas</h3>
-                        <p id="pubAttDateSubtitle" class="text-xs font-semibold text-muted-adaptive">Status kehadiran pada tanggal terpilih & total kumulatif semester.</p>
-                    </div>
-                    <input
-                        type="text"
-                        id="pubAttSearchInput"
-                        oninput="renderPublicAttendanceView()"
-                        placeholder="Cari nama / no. absen..."
-                        class="neo-input px-3 py-2 text-xs w-full sm:w-60"
-                    >
-                </div>
-                <div class="overflow-x-auto border-3 border-neo-ink rounded-lg">
-                    <table class="w-full text-left border-collapse neo-table">
-                        <thead>
-                            <tr class="bg-neo-ink text-white font-mono text-[11px] uppercase">
-                                <th class="py-2.5 px-2.5 border-r-2 border-neutral-700 text-center w-10">No</th>
-                                <th class="py-2.5 px-3 border-r-2 border-neutral-700 min-w-[180px]">Anggota Kelas</th>
-                                <th class="py-2.5 px-3 border-r-2 border-neutral-700 text-center">Status Hari Ini</th>
-                                <th class="py-2.5 px-3 border-r-2 border-neutral-700">Catatan / Keterangan</th>
-                                <th class="py-2.5 px-2.5 border-r-2 border-neutral-700 text-center">Total H/I/S/A</th>
-                                <th class="py-2.5 px-3 text-right">Persentase</th>
-                            </tr>
-                        </thead>
-                        <tbody id="pubAttTableBody" class="divide-y-2 divide-neo-ink text-xs font-semibold"></tbody>
-                    </table>
-                </div>
-            </div>
-        `;
-        userWorkspace.appendChild(absensiSec);
-    }
-
-    // 3. Perbarui Top Bar & Navigasi Panel Admin menjadi Menu Titik Tiga (Drawer Rapi Mobile-First) & Hapus Tombol Sync Manual
-    const adminWorkspace = document.getElementById("workspace-admin");
-    if (adminWorkspace && !document.getElementById("adminDrawerPanel")) {
-        // Sembunyikan bar tab lama yang menumpuk di layar HP
-        const oldNavCard = document.getElementById("adminNavTabsContainer")?.parentElement;
-        if (oldNavCard) oldNavCard.classList.add("hidden");
-
-        // Rombak Sticky Header Admin agar memiliki Tombol Titik Tiga (⋮) di Kiri + Indikator Tab Aktif + Pratinjau Web
-        const adminStickyBar = adminWorkspace.querySelector(".sticky.top-0");
-        if (adminStickyBar) {
-            adminStickyBar.innerHTML = `
-                <div class="max-w-7xl mx-auto flex items-center justify-between gap-2.5">
-                    <!-- Kiri: Tombol Titik Tiga Menu Admin + Info Tab Aktif -->
-                    <div class="flex items-center gap-2.5 sm:gap-3.5 min-w-0">
-                        <button
-                            type="button"
-                            onclick="toggleAdminDrawer(true)"
-                            aria-label="Menu Modul Admin"
-                            class="neo-btn bg-neo-yellow text-neo-ink w-10 h-10 sm:w-11 sm:h-11 shrink-0 text-base sm:text-lg"
-                        >
-                            <i class="fa-solid fa-ellipsis-vertical"></i>
-                        </button>
-
-                        <div class="min-w-0">
-                            <div class="flex flex-wrap items-center gap-1.5">
-                                <span id="activeAdminTabIndicator" class="font-mono text-[10px] font-extrabold bg-neo-mint text-neo-ink px-2 py-0.5 rounded border border-neo-ink uppercase truncate">
-                                    1. KAS & SHEET
-                                </span>
-                                <span id="adminCloudLiveBadge" class="hidden sm:inline-flex items-center gap-1 font-mono text-[10px] text-neutral-300 bg-white/10 px-2 py-0.5 rounded">
-                                    <i class="fa-solid fa-cloud text-neo-mint"></i> Cloud Aktif
-                                </span>
-                            </div>
-                            <h2 id="adminSessionName" class="font-display font-extrabold text-sm sm:text-lg uppercase text-white truncate mt-0.5">
-                                Panel Pengurus Kelas
-                            </h2>
-                            <p id="adminSessionPerms" class="hidden">{{perms}}</p>
-                            <span id="adminSessionRole" class="hidden">Super Admin</span>
-                        </div>
-                    </div>
-
-                    <!-- Kanan: Pratinjau Web, Tema & Keluar (Bersih di Mobile & Desktop) -->
-                    <div class="flex items-center gap-2 shrink-0">
-                        <button
-                            type="button"
-                            onclick="toggleDarkMode()"
-                            class="neo-btn bg-neo-surface text-neo-ink w-9 h-9 sm:w-10 sm:h-10 text-xs"
-                            title="Ganti Tema Gelap / Terang"
-                        >
-                            <i class="fa-solid fa-circle-half-stroke"></i>
-                        </button>
-
-                        <button
-                            type="button"
-                            onclick="enterAdminPreviewMode()"
-                            class="neo-btn bg-neo-sky text-neo-ink px-2.5 sm:px-3.5 py-2 text-xs"
-                        >
-                            <i class="fa-solid fa-eye"></i>
-                            <span class="hidden sm:inline">Pratinjau Web</span>
-                        </button>
-
-                        <button
-                            type="button"
-                            onclick="logoutAdmin()"
-                            class="neo-btn bg-neo-coral text-white px-2.5 sm:px-3.5 py-2 text-xs"
-                            title="Keluar dari Panel Admin"
-                        >
-                            <i class="fa-solid fa-right-from-bracket"></i>
-                            <span class="hidden sm:inline">Keluar</span>
-                        </button>
-                    </div>
-                </div>
-            `;
-        }
-
-        // Buat Slide-Out Drawer Khusus Modul Admin (Diakses dari Titik Tiga)
-        const drawerHtml = document.createElement("div");
-        drawerHtml.innerHTML = `
-            <div id="adminDrawerBackdrop" onclick="toggleAdminDrawer(false)" class="fixed inset-0 z-50 hidden bg-black/70 backdrop-blur-xs transition-opacity"></div>
-            <aside id="adminDrawerPanel" class="fixed top-0 left-0 bottom-0 z-50 w-72 sm:w-80 bg-neo-bg border-r-4 border-neo-ink shadow-neo-xl transform -translate-x-full transition-transform duration-200 flex flex-col justify-between p-4 sm:p-5 overflow-y-auto">
-                <div class="space-y-4">
-                    <div class="flex items-center justify-between pb-3 border-b-3 border-neo-ink">
-                        <div class="flex items-center gap-2.5 min-w-0">
-                            <div class="w-10 h-10 bg-neo-mint text-neo-ink border-2 border-neo-ink rounded-xl flex items-center justify-center font-bold text-base shrink-0 shadow-neo-sm">
-                                <i class="fa-solid fa-user-shield"></i>
-                            </div>
-                            <div class="min-w-0">
-                                <div id="drawerAdminUserTitle" class="font-display font-extrabold text-sm uppercase truncate">PENGURUS KELAS</div>
-                                <div id="drawerAdminRoleBadge" class="font-mono text-[10px] font-bold text-neo-violet">SUPER ADMIN</div>
-                            </div>
-                        </div>
-                        <button type="button" onclick="toggleAdminDrawer(false)" class="neo-btn bg-neo-coral text-white w-8 h-8 text-xs shrink-0">
-                            <i class="fa-solid fa-xmark"></i>
-                        </button>
-                    </div>
-
-                    <div class="font-mono text-[10px] font-extrabold uppercase text-muted-adaptive px-1">
-                        PILIH TAB MODUL ADMIN:
-                    </div>
-
-                    <nav id="adminDrawerNavList" class="space-y-2">
-                        <button type="button" onclick="selectAdminTabFromDrawer('adm-keuangan')" id="admdrawer-adm-keuangan" data-perm="keuangan" class="admin-nav-btn active neo-btn bg-white text-neo-ink w-full justify-start px-3.5 py-2.5 text-xs sm:text-sm">
-                            <span class="w-6 text-center"><i class="fa-solid fa-coins text-amber-500"></i></span>
-                            <span class="flex-1 text-left">1. Kas, Senin & Sheet</span>
-                        </button>
-
-                        <button type="button" onclick="selectAdminTabFromDrawer('adm-absensi')" id="admdrawer-adm-absensi" data-perm="absensi" class="admin-nav-btn neo-btn bg-white text-neo-ink w-full justify-start px-3.5 py-2.5 text-xs sm:text-sm">
-                            <span class="w-6 text-center"><i class="fa-solid fa-clipboard-user text-emerald-500"></i></span>
-                            <span class="flex-1 text-left">2. Absensi Digital</span>
-                            <span class="bg-neo-lime text-neo-ink border border-neo-ink rounded px-1.5 text-[9px] font-mono">BARU</span>
-                        </button>
-
-                        <button type="button" onclick="selectAdminTabFromDrawer('adm-siswa')" id="admdrawer-adm-siswa" data-perm="siswa" class="admin-nav-btn neo-btn bg-white text-neo-ink w-full justify-start px-3.5 py-2.5 text-xs sm:text-sm">
-                            <span class="w-6 text-center"><i class="fa-solid fa-user-graduate text-sky-500"></i></span>
-                            <span class="flex-1 text-left">3. Anggota & Struktur</span>
-                        </button>
-
-                        <button type="button" onclick="selectAdminTabFromDrawer('adm-info')" id="admdrawer-adm-info" data-perm="info" class="admin-nav-btn neo-btn bg-white text-neo-ink w-full justify-start px-3.5 py-2.5 text-xs sm:text-sm">
-                            <span class="w-6 text-center"><i class="fa-solid fa-bullhorn text-rose-500"></i></span>
-                            <span class="flex-1 text-left">4. Tugas & Mading</span>
-                        </button>
-
-                        <button type="button" onclick="selectAdminTabFromDrawer('adm-jadwal')" id="admdrawer-adm-jadwal" data-perm="jadwal" class="admin-nav-btn neo-btn bg-white text-neo-ink w-full justify-start px-3.5 py-2.5 text-xs sm:text-sm">
-                            <span class="w-6 text-center"><i class="fa-solid fa-calendar-days text-purple-500"></i></span>
-                            <span class="flex-1 text-left">5. Jadwal & Pilih Jam</span>
-                        </button>
-
-                        <button type="button" onclick="selectAdminTabFromDrawer('adm-album')" id="admdrawer-adm-album" data-perm="album" class="admin-nav-btn neo-btn bg-white text-neo-ink w-full justify-start px-3.5 py-2.5 text-xs sm:text-sm">
-                            <span class="w-6 text-center"><i class="fa-solid fa-camera text-orange-500"></i></span>
-                            <span class="flex-1 text-left">6. Galeri Album</span>
-                        </button>
-
-                        <button type="button" onclick="selectAdminTabFromDrawer('adm-akun')" id="admdrawer-adm-akun" data-perm="akun" class="admin-nav-btn neo-btn bg-white text-neo-ink w-full justify-start px-3.5 py-2.5 text-xs sm:text-sm">
-                            <span class="w-6 text-center"><i class="fa-solid fa-users-gear text-pink-500"></i></span>
-                            <span class="flex-1 text-left">7. Akun & Sandi Admin</span>
-                        </button>
-
-                        <button type="button" onclick="selectAdminTabFromDrawer('adm-pengaturan')" id="admdrawer-adm-pengaturan" data-perm="pengaturan" class="admin-nav-btn neo-btn bg-white text-neo-ink w-full justify-start px-3.5 py-2.5 text-xs sm:text-sm">
-                            <span class="w-6 text-center"><i class="fa-solid fa-sliders text-indigo-500"></i></span>
-                            <span class="flex-1 text-left">8. Identitas & Semester</span>
-                        </button>
-                    </nav>
-                </div>
-
-                <div class="pt-4 border-t-3 border-neo-ink space-y-2">
-                    <button type="button" onclick="toggleAdminDrawer(false); enterAdminPreviewMode();" class="neo-btn bg-neo-sky text-neo-ink w-full py-2.5 px-3.5 text-xs justify-between">
-                        <span class="flex items-center gap-2"><i class="fa-solid fa-eye"></i> Pratinjau Web Publik</span>
-                        <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
-                    </button>
-                    <button type="button" onclick="toggleAdminDrawer(false); logoutAdmin();" class="neo-btn bg-neo-coral text-white w-full py-2.5 px-3.5 text-xs justify-between">
-                        <span class="flex items-center gap-2"><i class="fa-solid fa-right-from-bracket"></i> Keluar Workspace</span>
-                        <i class="fa-solid fa-power-off text-[10px]"></i>
-                    </button>
-                </div>
-            </aside>
-        `;
-        adminWorkspace.appendChild(drawerHtml);
-    }
-
-    // 4. Suntikkan Section Admin Baru: `#adm-absensi` (Kelola Absensi Digital)
-    const adminContainer = adminWorkspace?.querySelector(".max-w-7xl.mx-auto.px-3");
-    if (adminContainer && !document.getElementById("adm-absensi")) {
-        const admAbsenSec = document.createElement("section");
-        admAbsenSec.id = "adm-absensi";
-        admAbsenSec.className = "admin-section hidden space-y-6";
-        admAbsenSec.innerHTML = `
-            <div class="neo-card bg-neo-lime text-neo-ink p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                    <span class="neo-badge bg-white text-neo-ink mb-1"><i class="fa-solid fa-user-check"></i> MODUL PRESENSI HARIAN</span>
-                    <h3 class="font-display font-extrabold text-lg sm:text-xl uppercase">Kelola Absensi Digital Kelas</h3>
-                    <p class="text-xs font-semibold opacity-90">Pilih tanggal, klik status kehadiran (Hadir/Izin/Sakit/Alfa), lalu tekan Simpan Absensi.</p>
-                </div>
-                <div class="flex flex-wrap items-center gap-2">
-                    <input
-                        type="date"
-                        id="admAttendanceDateInput"
-                        onchange="handleAdminAttendanceDateChange(this.value)"
-                        class="neo-input px-3 py-2 text-xs font-mono bg-white text-neo-ink"
-                    >
-                    <button type="button" onclick="markAllAttendancePresent()" class="neo-btn bg-white text-neo-ink px-3 py-2 text-xs">
-                        <i class="fa-solid fa-check-double text-emerald-600"></i> Semua Hadir (H)
-                    </button>
-                    <button type="button" onclick="downloadAttendanceExcelSheet()" class="neo-btn bg-neo-yellow text-neo-ink px-3.5 py-2 text-xs">
-                        <i class="fa-solid fa-file-excel"></i> Unduh Sheet Absen (.xls)
-                    </button>
-                </div>
-            </div>
-
-            <div class="neo-card bg-white p-4 sm:p-6 space-y-4">
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b-3 border-neo-ink">
-                    <div>
-                        <h4 id="admAttendanceTableTitle" class="font-display font-extrabold text-base uppercase">Lembar Presensi Anggota</h4>
-                        <p class="text-xs font-semibold text-muted-adaptive">Setiap perubahan atau klik tombol Simpan akan langsung masuk ke Firebase.</p>
-                    </div>
-                    <button type="button" onclick="saveCurrentDayAttendance()" class="neo-btn bg-neo-mint text-neo-ink px-4 py-2.5 text-xs">
-                        <i class="fa-solid fa-floppy-disk"></i> Simpan Absensi Tanggal Ini
-                    </button>
-                </div>
-
-                <div class="overflow-x-auto border-3 border-neo-ink rounded-lg">
-                    <table class="w-full text-left border-collapse neo-table">
-                        <thead>
-                            <tr class="bg-neo-ink text-white font-mono text-[11px] uppercase">
-                                <th class="py-2.5 px-2.5 border-r-2 border-neutral-700 text-center w-10">No</th>
-                                <th class="py-2.5 px-3 border-r-2 border-neutral-700 min-w-[170px]">Nama Anggota</th>
-                                <th class="py-2.5 px-3 border-r-2 border-neutral-700 text-center min-w-[210px]">Pilih Status Kehadiran</th>
-                                <th class="py-2.5 px-3 border-r-2 border-neutral-700 min-w-[180px]">Catatan (Surat/Alasan)</th>
-                                <th class="py-2.5 px-2.5 text-center">Rekap H/I/S/A</th>
-                            </tr>
-                        </thead>
-                        <tbody id="admAttendanceTableBody" class="divide-y-2 divide-neo-ink text-xs font-semibold"></tbody>
-                    </table>
-                </div>
-            </div>
-        `;
-        adminContainer.appendChild(admAbsenSec);
-    }
-
-    // 5. Tingkatkan Form Akun Pengurus (`#adm-akun`) agar Mendukung Edit & Ganti Sandi
-    const admAkunSection = document.getElementById("adm-akun");
-    if (admAkunSection && !document.getElementById("admAccEditOriginalUser")) {
-        const formEl = admAkunSection.querySelector("form");
-        const headingEl = admAkunSection.querySelector("h3");
-        if (headingEl) {
-            headingEl.outerHTML = `
-                <div class="border-b-3 border-neo-ink pb-2.5 flex items-center justify-between">
-                    <h3 id="admAccFormTitle" class="font-display font-extrabold text-base uppercase">Buat / Ganti Sandi Akun Pengurus</h3>
-                    <button type="button" onclick="resetAdminAccountForm()" id="btnCancelEditAcc" class="hidden text-xs font-bold text-rose-500 underline">Batal Edit</button>
-                </div>
-            `;
-        }
-        if (formEl) {
-            const hiddenInput = document.createElement("input");
-            hiddenInput.type = "hidden";
-            hiddenInput.id = "admAccEditOriginalUser";
-            hiddenInput.value = "";
-            formEl.prepend(hiddenInput);
-
-            const passInput = document.getElementById("admAccPassword");
-            if (passInput) {
-                const wrapper = document.createElement("div");
-                wrapper.className = "relative";
-                passInput.parentNode.insertBefore(wrapper, passInput);
-                wrapper.appendChild(passInput);
-                passInput.classList.add("pr-9");
-                const toggleBtn = document.createElement("button");
-                toggleBtn.type = "button";
-                toggleBtn.className = "absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-neo-ink text-xs";
-                toggleBtn.setAttribute("onclick", "toggleAdminFormPassword()");
-                toggleBtn.innerHTML = `<i id="admAccPassEye" class="fa-solid fa-eye"></i>`;
-                wrapper.appendChild(toggleBtn);
-            }
-        }
-    }
-
-    // 6. Tambahkan Panel "Mulai Semester Baru & Arsip Semester" di `#adm-pengaturan`
-    const admPengaturanSec = document.getElementById("adm-pengaturan");
-    if (admPengaturanSec && !document.getElementById("semesterArchiveManagerCard")) {
-        const archiveCard = document.createElement("div");
-        archiveCard.id = "semesterArchiveManagerCard";
-        archiveCard.className = "neo-card bg-white p-5 sm:p-6 space-y-5 border-4 border-neo-ink";
-        archiveCard.innerHTML = `
-            <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-4 border-b-3 border-neo-ink">
-                <div>
-                    <div class="flex items-center gap-2 mb-1">
-                        <span class="neo-badge bg-neo-violet text-white"><i class="fa-solid fa-box-archive"></i> MANAJEMEN PERIODE & ARSIP SEMESTER</span>
-                        <span id="currentActiveSemesterPill" class="neo-badge bg-neo-yellow text-neo-ink font-mono">Semester Ganjil • TA 2026/2027</span>
-                    </div>
-                    <h3 class="font-display font-extrabold text-lg sm:text-xl uppercase">Mulai Semester Baru Tanpa Hapus Data Lama</h3>
-                    <p class="text-xs font-semibold text-muted-adaptive mt-0.5">
-                        Arsipkan seluruh buku kas, pelunasan iuran Senin, absensi, dan pengumuman semester ini ke brankas riwayat, lalu mulai semester baru dengan daftar siswa yang tetap utuh.
-                    </p>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-                <!-- Form Mulai Semester Baru (5 Cols) -->
-                <div class="lg:col-span-5 bg-neo-surface border-2.5 border-neo-ink rounded-xl p-4 space-y-3">
-                    <h4 class="font-display font-extrabold text-sm uppercase flex items-center gap-2">
-                        <i class="fa-solid fa-rocket text-neo-coral"></i> Buat & Mulai Semester Baru
-                    </h4>
-                    <div>
-                        <label class="block font-display font-extrabold text-[11px] uppercase mb-1">Nama Label Arsip Semester Saat Ini</label>
-                        <input type="text" id="archiveCurrentLabelInput" placeholder="Contoh: Semester Ganjil 2026/2027" class="neo-input w-full px-3 py-2 text-xs">
-                    </div>
-                    <div class="grid grid-cols-2 gap-2.5">
-                        <div>
-                            <label class="block font-display font-extrabold text-[11px] uppercase mb-1">Semester Baru</label>
-                            <select id="newSemesterNameSelect" class="neo-input w-full px-2.5 py-2 text-xs">
-                                <option value="Semester Genap">Semester Genap</option>
-                                <option value="Semester Ganjil">Semester Ganjil</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block font-display font-extrabold text-[11px] uppercase mb-1">Tahun Ajaran Baru</label>
-                            <input type="text" id="newSemesterAcYearInput" placeholder="2026/2027" class="neo-input w-full px-2.5 py-2 text-xs font-mono">
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-2 gap-2.5">
-                        <div>
-                            <label class="block font-display font-extrabold text-[10px] uppercase mb-1">Tgl Awal Kas Baru</label>
-                            <input type="date" id="newSemesterStartDate" class="neo-input w-full px-2.5 py-2 text-xs font-mono">
-                        </div>
-                        <div>
-                            <label class="block font-display font-extrabold text-[10px] uppercase mb-1">Tgl Akhir Kas Baru</label>
-                            <input type="date" id="newSemesterEndDate" class="neo-input w-full px-2.5 py-2 text-xs font-mono">
-                        </div>
-                    </div>
-                    <button type="button" onclick="handleStartNewSemester()" class="neo-btn bg-neo-mint text-neo-ink w-full py-3 text-xs">
-                        <i class="fa-solid fa-box-archive"></i> Arsipkan Semester Ini & Mulai Baru
-                    </button>
-                </div>
-
-                <!-- Daftar Arsip Semester Terdahulu (7 Cols) -->
-                <div class="lg:col-span-7 space-y-3">
-                    <div class="flex items-center justify-between">
-                        <h4 class="font-display font-extrabold text-sm uppercase">Daftar Brankas Arsip Semester Lalu</h4>
-                        <span id="archiveTotalCountBadge" class="neo-badge bg-neo-yellow text-neo-ink">0 Arsip</span>
-                    </div>
-                    <div id="semesterArchivesListContainer" class="space-y-2.5"></div>
-                </div>
-            </div>
-        `;
-        admPengaturanSec.appendChild(archiveCard);
-    }
-}
-
-window.toggleAdminDrawer = function (open) {
-    const backdrop = document.getElementById("adminDrawerBackdrop");
-    const panel = document.getElementById("adminDrawerPanel");
-    if (!backdrop || !panel) return;
-    if (open) {
-        backdrop.classList.remove("hidden");
-        panel.classList.remove("-translate-x-full");
-    } else {
-        backdrop.classList.add("hidden");
-        panel.classList.add("-translate-x-full");
-    }
-};
-
-window.selectAdminTabFromDrawer = function (sectionId) {
-    toggleAdminDrawer(false);
-    switchAdminTab(sectionId);
-};
 
 // ============================================================================
 // MODE GELAP (DARK MODE) SELARAS
@@ -739,17 +302,16 @@ function updateWorkspaceVisibility() {
         publicFooter?.classList.remove("hidden");
         previewBanner?.classList.remove("hidden");
         btnReturnTop?.classList.remove("hidden");
+        switchTab(activeTabId || "dashboard");
         renderAllViews();
     } else {
         activeWorkspace = "user";
         publicChrome?.classList.remove("hidden");
         userMain?.classList.remove("hidden");
         publicFooter?.classList.remove("hidden");
+        switchTab(activeTabId || "dashboard");
         renderAllViews();
     }
-
-    window.scrollTo({ top: 0, behavior: "smooth" });
-    setTimeout(initScrollRevealObserver, 70);
 }
 
 window.openFullLoginScreen = function () {
@@ -762,7 +324,7 @@ window.openFullLoginScreen = function () {
     updateWorkspaceVisibility();
     setTimeout(() => {
         document.getElementById("loginUsername")?.focus();
-    }, 120);
+    }, 100);
 };
 
 window.closeFullLoginScreen = function () {
@@ -801,6 +363,24 @@ window.navigateFromDrawer = function (tabId) {
     switchTab(tabId);
 };
 
+window.toggleAdminDrawer = function (open) {
+    const backdrop = document.getElementById("adminDrawerBackdrop");
+    const panel = document.getElementById("adminDrawerPanel");
+    if (!backdrop || !panel) return;
+    if (open) {
+        backdrop.classList.remove("hidden");
+        panel.classList.remove("-translate-x-full");
+    } else {
+        backdrop.classList.add("hidden");
+        panel.classList.add("-translate-x-full");
+    }
+};
+
+window.selectAdminTabFromDrawer = function (sectionId) {
+    toggleAdminDrawer(false);
+    switchAdminTab(sectionId);
+};
+
 window.handleSecretClassNameTap = function () {
     secretTapCount++;
     if (secretTapTimer) clearTimeout(secretTapTimer);
@@ -815,7 +395,7 @@ window.handleSecretClassNameTap = function () {
 };
 
 // ============================================================================
-// OTENTIKASI LOGIN PENGURUS (MEMBACA LANGSUNG AKUN DARI CLOUD FIREBASE)
+// OTENTIKASI LOGIN PENGURUS & MANAJEMEN AKUN FIREBASE
 // ============================================================================
 
 window.togglePasswordVisibility = function () {
@@ -846,9 +426,11 @@ window.toggleAdminFormPassword = function () {
 
 window.handleAdminLoginSubmit = async function (e) {
     e.preventDefault();
-    const rawInput = document.getElementById("loginUsername").value.trim().toLowerCase();
-    const passwordInput = document.getElementById("loginPassword").value;
+    const rawInput = (document.getElementById("loginUsername")?.value || "").trim().toLowerCase();
+    const passwordInput = document.getElementById("loginPassword")?.value || "";
     const submitBtn = document.getElementById("btnSubmitAdminLogin");
+
+    if (!rawInput || !passwordInput) return;
 
     if (submitBtn) {
         submitBtn.disabled = true;
@@ -857,58 +439,55 @@ window.handleAdminLoginSubmit = async function (e) {
 
     let authenticatedProfile = null;
     const emailCandidate = rawInput.includes("@") ? rawInput : `${rawInput}@kelas.id`;
+    const inputNameOnly = rawInput.split("@")[0];
 
-    // 1. Segarkan daftar akun terbaru langsung dari server Firebase agar akun yang baru dibuat di HP lain langsung terbaca
+    // 1. Ambil daftar akun terbaru langsung dari server Firebase
     try {
         const freshCloudAdmins = await fetchAllAdminsFromCloud();
         if (freshCloudAdmins.length > 0) {
             externalFirebaseAdmins = mergeAdminArrays(externalFirebaseAdmins, freshCloudAdmins);
         }
-    } catch (e) {}
+    } catch (err) {}
 
-    // 2. Cek kecocokan di database akun pengurus (appData.admins + koleksi Firebase) terlebih dahulu
-    //    (Agar jika sandi baru saja diubah di Panel Admin, sandi baru langsung berlaku!)
+    // 2. Cek kecocokan dari daftar akun gabungan (appData.admins + koleksi Firebase)
     const allAdmins = getAllCombinedAdmins();
-    const foundInCloudList = allAdmins.find((a) => {
-        const u = String(a.username || "").toLowerCase();
-        const em = String(a.email || "").toLowerCase();
+    const matchedLocal = allAdmins.find((a) => {
+        const u = String(a.username || "").trim().toLowerCase();
+        const em = String(a.email || "").trim().toLowerCase();
         const unameOnly = u.split("@")[0];
-        const inputNameOnly = rawInput.split("@")[0];
-        return (
-            (u === rawInput || em === rawInput || u === emailCandidate || unameOnly === inputNameOnly) &&
-            String(a.password) === String(passwordInput)
-        );
+        const usernameMatch = u === rawInput || em === rawInput || u === emailCandidate || unameOnly === inputNameOnly;
+        return usernameMatch && String(a.password) === String(passwordInput);
     });
 
-    if (foundInCloudList) {
-        authenticatedProfile = foundInCloudList;
+    if (matchedLocal) {
+        authenticatedProfile = matchedLocal;
     }
 
-    // 3. Jika belum ditemukan di koleksi, coba via Firebase Authentication (Email & Password)
+    // 3. Jika belum cocok di tabel akun, coba melalui Firebase Auth Email/Password
     if (!authenticatedProfile) {
         try {
             const userCred = await loginWithFirebaseAuth(emailCandidate, passwordInput);
             if (userCred && userCred.user) {
                 const loggedEmail = (userCred.user.email || emailCandidate).toLowerCase();
-                const matchedInDb = allAdmins.find(
+                const existingInList = allAdmins.find(
                     (a) =>
                         String(a.username).toLowerCase() === loggedEmail ||
                         String(a.email || "").toLowerCase() === loggedEmail ||
-                        String(a.username).toLowerCase() === rawInput
+                        String(a.username).toLowerCase().split("@")[0] === inputNameOnly
                 );
 
-                authenticatedProfile = matchedInDb || {
+                authenticatedProfile = existingInList || {
                     id: userCred.user.uid,
                     username: loggedEmail,
                     email: loggedEmail,
                     password: passwordInput,
-                    name: loggedEmail === "admin@kelas.id" ? "Admin Utama Kelas" : (userCred.user.displayName || loggedEmail.split("@")[0]),
+                    name: loggedEmail === "admin@kelas.id" ? "Admin Utama Kelas" : (userCred.user.displayName || inputNameOnly),
                     role: "Super Admin",
                     isSuperAdmin: true,
                     permissions: ["keuangan", "absensi", "siswa", "info", "jadwal", "album", "akun", "pengaturan"]
                 };
             }
-        } catch (firebaseAuthErr) {}
+        } catch (authErr) {}
     }
 
     if (submitBtn) {
@@ -917,7 +496,7 @@ window.handleAdminLoginSubmit = async function (e) {
     }
 
     if (!authenticatedProfile) {
-        showToast("Username/Email atau Password tidak sesuai!", "bg-neo-coral");
+        showToast("Username/Email atau Password tidak sesuai! Periksa kembali ketikan Anda.", "bg-neo-coral");
         return;
     }
 
@@ -926,13 +505,14 @@ window.handleAdminLoginSubmit = async function (e) {
     setupAdminSessionTabs();
     activeWorkspace = "admin";
     updateWorkspaceVisibility();
-    showToast(`Selamat datang kembali, ${authenticatedProfile.name}!`, "bg-neo-mint");
+    showToast(`Selamat datang di Workspace Pengurus, ${authenticatedProfile.name}!`, "bg-neo-mint");
 };
 
 window.logoutAdmin = async function () {
     currentAdmin = null;
     await logoutFirebaseSession();
-    document.getElementById("drawerAdminLoginText").textContent = "Login Pengurus Kelas";
+    const loginText = document.getElementById("drawerAdminLoginText");
+    if (loginText) loginText.textContent = "Login Pengurus Kelas";
     activeWorkspace = "user";
     updateWorkspaceVisibility();
     showToast("Anda telah keluar dari Workspace Pengurus.", "bg-neo-yellow");
@@ -941,8 +521,14 @@ window.logoutAdmin = async function () {
 function setupAdminSessionTabs() {
     if (!currentAdmin) return;
 
-    document.getElementById("drawerAdminLoginText").textContent = `Workspace (${currentAdmin.name.split(" ")[0]})`;
-    document.getElementById("adminSessionName").textContent = `${currentAdmin.name} • ${currentAdmin.role}`;
+    const loginTxt = document.getElementById("drawerAdminLoginText");
+    if (loginTxt) loginTxt.textContent = `Workspace (${currentAdmin.name.split(" ")[0]})`;
+
+    const sessName = document.getElementById("adminSessionName");
+    if (sessName) sessName.textContent = currentAdmin.name;
+
+    const sessRole = document.getElementById("adminSessionRole");
+    if (sessRole) sessRole.textContent = currentAdmin.role;
 
     const drawerTitle = document.getElementById("drawerAdminUserTitle");
     const drawerRole = document.getElementById("drawerAdminRoleBadge");
@@ -1010,7 +596,7 @@ window.switchAdminTab = function (sectionId) {
 };
 
 // ============================================================================
-// PEMBACAAN GAMBAR INSTAN TANPA KOMPRESI & PRATINJAU LANGSUNG
+// PEMBACAAN GAMBAR INSTAN & PRATINJAU LANGSUNG
 // ============================================================================
 
 function readImageFileInstantly(file, callback) {
@@ -1053,7 +639,7 @@ window.handleInstantConfigImage = function (e, targetInputId, previewImgId, fall
         const inputEl = document.getElementById(targetInputId);
         if (inputEl) inputEl.value = dataUrl;
         syncConfigPreview(targetInputId, previewImgId, fallbackId);
-        showToast("Gambar berhasil dimuat! Klik Simpan Pengaturan untuk menyimpan ke Firebase.", "bg-neo-mint");
+        showToast("Gambar dimuat! Klik Simpan Pengaturan untuk menyimpan ke Firebase.", "bg-neo-mint");
     });
 };
 
@@ -1078,7 +664,7 @@ window.resetHeroBgToDefault = function () {
 };
 
 // ============================================================================
-// PERHITUNGAN TANGGAL SENIN, KEUANGAN & STATISTIK ABSENSI
+// PERHITUNGAN TANGGAL SENIN, MINGGU ABSENSI, BULAN ABSENSI & KEUANGAN KAS
 // ============================================================================
 
 function getMondayDatesList() {
@@ -1116,12 +702,46 @@ function getMondayDatesList() {
     return mondays;
 }
 
+/**
+ * Menghasilkan 6 tanggal hari sekolah (Senin s/d Sabtu) dari tanggal mana pun yang dipilih
+ */
+function getSixSchoolDaysOfWeek(anyIsoDate) {
+    let base = new Date(String(anyIsoDate || toLocalISODate()) + "T00:00:00");
+    if (isNaN(base.getTime())) base = new Date();
+    const day = base.getDay();
+    const diffToMonday = day === 0 ? -6 : 1 - day;
+    const monday = new Date(base);
+    monday.setDate(base.getDate() + diffToMonday);
+
+    const dayLabels = ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
+    const result = [];
+    for (let i = 0; i < 6; i++) {
+        const d = new Date(monday);
+        d.setDate(monday.getDate() + i);
+        const iso = toLocalISODate(d);
+        result.push({
+            iso,
+            dayName: dayLabels[i],
+            shortDate: `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`
+        });
+    }
+    return result;
+}
+
 function formatShortMondayLabel(isoDate) {
     const parts = String(isoDate || "").split("-");
     if (parts.length !== 3) return isoDate;
     const months = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
     const mIdx = parseInt(parts[1], 10) - 1;
     return `${parts[2]} ${months[mIdx] || parts[1]}`;
+}
+
+function formatMonthTitle(yyyyMm) {
+    const parts = String(yyyyMm || "").split("-");
+    if (parts.length !== 2) return yyyyMm;
+    const months = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+    const mIdx = parseInt(parts[1], 10) - 1;
+    return `${months[mIdx] || parts[1]} ${parts[0]}`;
 }
 
 function ensureStudentPaidDatesMigrated(student, mondayDates) {
@@ -1193,12 +813,13 @@ function calculateFinancialSummary() {
 }
 
 /**
- * Menghitung akumulasi kehadiran per siswa sepanjang semester aktif
+ * Menghitung akumulasi kehadiran per siswa pada daftar tanggal tertentu (atau seluruh semester jika dateKeys null)
  */
-function calculateStudentAttendanceStats(studentId) {
+function calculateStudentAttendanceStats(studentId, dateKeysFilter = null) {
     const attMap = appData.attendance || {};
+    const keys = Array.isArray(dateKeysFilter) ? dateKeysFilter : Object.keys(attMap);
     let H = 0, I = 0, S = 0, A = 0;
-    Object.keys(attMap).forEach((dateKey) => {
+    keys.forEach((dateKey) => {
         const dayRecord = attMap[dateKey]?.[studentId];
         if (dayRecord && dayRecord.status) {
             if (dayRecord.status === "H") H++;
@@ -1213,7 +834,7 @@ function calculateStudentAttendanceStats(studentId) {
 }
 
 // ============================================================================
-// KOMPONEN VISUAL AVATAR, TYPEWRITER, SCROLL REVEAL & TOAST
+// KOMPONEN VISUAL AVATAR, TYPEWRITER & TOAST
 // ============================================================================
 
 function renderAvatarHtml(name, photoUrl, sizeClass = "w-11 h-11", textClass = "text-sm") {
@@ -1256,38 +877,7 @@ function runHeroTypewriter(text) {
     currentTypedGoal = cleanText;
 
     if (typewriterTimer) clearTimeout(typewriterTimer);
-    target.textContent = "";
-    let idx = 0;
-
-    function step() {
-        if (idx <= cleanText.length) {
-            target.textContent = cleanText.slice(0, idx);
-            idx++;
-            typewriterTimer = setTimeout(step, 48);
-        }
-    }
-    step();
-}
-
-function initScrollRevealObserver() {
-    const elements = document.querySelectorAll(".reveal-on-scroll");
-    if (!("IntersectionObserver" in window)) {
-        elements.forEach((el) => el.classList.add("is-visible"));
-        return;
-    }
-    if (!scrollObserver) {
-        scrollObserver = new IntersectionObserver(
-            (entries) => {
-                entries.forEach((entry) => {
-                    if (entry.isIntersecting) {
-                        entry.target.classList.add("is-visible");
-                    }
-                });
-            },
-            { threshold: 0.08, rootMargin: "0px 0px -20px 0px" }
-        );
-    }
-    elements.forEach((el) => scrollObserver.observe(el));
+    target.textContent = cleanText;
 }
 
 window.openModal = function (id) {
@@ -1308,7 +898,7 @@ function showToast(message, bgColor = "bg-neo-yellow") {
             <i class="fa-solid fa-bell"></i>
             <span>${message}</span>
         </div>
-        <button onclick="this.parentElement.remove()" class="font-bold text-xs px-1.5 border border-neo-ink bg-white text-neo-ink rounded">✕</button>
+        <button type="button" onclick="this.parentElement.remove()" class="font-bold text-xs px-1.5 border border-neo-ink bg-white text-neo-ink rounded">✕</button>
     `;
     container.appendChild(toast);
     setTimeout(() => {
@@ -1321,12 +911,12 @@ function showToast(message, bgColor = "bg-neo-yellow") {
 // ============================================================================
 
 window.switchTab = function (tabId) {
-    activeTabId = tabId;
+    activeTabId = tabId || "dashboard";
     const tabs = ["dashboard", "keuangan", "absensi", "mading", "info", "jadwal", "album", "siswa"];
     tabs.forEach((t) => {
         const viewEl = document.getElementById(`view-${t}`);
         const btnDrawer = document.getElementById(`drawertab-${t}`);
-        if (t === tabId) {
+        if (t === activeTabId) {
             viewEl?.classList.remove("hidden");
             btnDrawer?.classList.add("active");
         } else {
@@ -1334,9 +924,8 @@ window.switchTab = function (tabId) {
             btnDrawer?.classList.remove("active");
         }
     });
-    if (tabId === "absensi") renderPublicAttendanceView();
+    if (activeTabId === "absensi") renderPublicAttendanceView();
     window.scrollTo({ top: 0, behavior: "smooth" });
-    setTimeout(initScrollRevealObserver, 60);
 };
 
 function renderHeaderAndHeroIdentity() {
@@ -1353,9 +942,12 @@ function renderHeaderAndHeroIdentity() {
         if (el) el.textContent = code;
     });
 
-    document.getElementById("headerClassName").textContent = name;
-    document.getElementById("drawerClassName").textContent = name;
-    document.getElementById("heroClassIdentityTitle").textContent = `KELAS ${name}`;
+    const elHeaderName = document.getElementById("headerClassName");
+    if (elHeaderName) elHeaderName.textContent = name;
+    const elDrawerName = document.getElementById("drawerClassName");
+    if (elDrawerName) elDrawerName.textContent = name;
+    const elHeroTitle = document.getElementById("heroClassIdentityTitle");
+    if (elHeroTitle) elHeroTitle.textContent = `KELAS ${name}`;
     const loginNameEl = document.getElementById("loginFullClassName");
     if (loginNameEl) loginNameEl.textContent = `KELAS ${name}`;
 
@@ -1406,14 +998,21 @@ function renderHeaderAndHeroIdentity() {
 
     runHeroTypewriter(cfg.welcomeTypingText || `SELAMAT DATANG DI ${name}`);
 
-    document.getElementById("heroWelcomeDesc").textContent =
-        cfg.heroSubtitle ||
-        "Keluarga besar penuh semangat kolaborasi, kepedulian, dan prestasi akademik yang tumbuh bersama dalam satu kesatuan.";
+    const heroDesc = document.getElementById("heroWelcomeDesc");
+    if (heroDesc) {
+        heroDesc.textContent =
+            cfg.heroSubtitle ||
+            "Keluarga besar penuh semangat kolaborasi, kepedulian, dan prestasi akademik yang tumbuh bersama dalam satu kesatuan.";
+    }
 
-    document.getElementById("headerClassSubtitle").textContent = `${motto} • ${semLabel} ${cfg.academicYear || "-"}`;
-    document.getElementById("drawerAcademicYear").textContent = `${semLabel} ${cfg.academicYear || "-"}`;
-    document.getElementById("drawerWaliKelas").textContent = `Wali Kelas: ${cfg.waliKelas || "-"}`;
-    document.getElementById("footerClassIdentity").textContent = `${name} • "${motto}" • ${semLabel} TA ${cfg.academicYear || "-"}`;
+    const subEl = document.getElementById("headerClassSubtitle");
+    if (subEl) subEl.textContent = `${motto} • ${semLabel} ${cfg.academicYear || "-"}`;
+    const drwAc = document.getElementById("drawerAcademicYear");
+    if (drwAc) drwAc.textContent = `${semLabel} ${cfg.academicYear || "-"}`;
+    const drwWali = document.getElementById("drawerWaliKelas");
+    if (drwWali) drwWali.textContent = `Wali Kelas: ${cfg.waliKelas || "-"}`;
+    const footEl = document.getElementById("footerClassIdentity");
+    if (footEl) footEl.textContent = `${name} • "${motto}" • ${semLabel} TA ${cfg.academicYear || "-"}`;
 
     const madingBadge = document.getElementById("badgeMadingCount");
     if (madingBadge) madingBadge.textContent = (appData.stickyNotes || []).length;
@@ -1421,21 +1020,27 @@ function renderHeaderAndHeroIdentity() {
     if (siswaBadge) siswaBadge.textContent = (appData.students || []).length;
 
     const marqueeText = cfg.marqueeText || `Selamat datang di Portal Resmi ${name} • ${motto}`;
-    document.getElementById("topMarqueeContent").innerHTML = `
-        <span class="mx-6 flex items-center gap-2"><span class="bg-neo-yellow text-neo-ink px-2 py-0.5 rounded-sm font-extrabold">${name}</span> ${marqueeText}</span>
-        <span class="mx-6 flex items-center gap-2"><span class="bg-neo-mint text-neo-ink px-2 py-0.5 rounded-sm font-extrabold">${semLabel.toUpperCase()}</span> TA ${cfg.academicYear || "2026/2027"}</span>
-        <span class="mx-6 flex items-center gap-2"><span class="bg-neo-yellow text-neo-ink px-2 py-0.5 rounded-sm font-extrabold">${name}</span> ${marqueeText}</span>
-        <span class="mx-6 flex items-center gap-2"><span class="bg-neo-mint text-neo-ink px-2 py-0.5 rounded-sm font-extrabold">MOTTO</span> "${motto}"</span>
-    `;
+    const mqEl = document.getElementById("topMarqueeContent");
+    if (mqEl) {
+        mqEl.innerHTML = `
+            <span class="mx-6 flex items-center gap-2"><span class="bg-neo-yellow text-neo-ink px-2 py-0.5 rounded-sm font-extrabold">${name}</span> ${marqueeText}</span>
+            <span class="mx-6 flex items-center gap-2"><span class="bg-neo-mint text-neo-ink px-2 py-0.5 rounded-sm font-extrabold">${semLabel.toUpperCase()}</span> TA ${cfg.academicYear || "2026/2027"}</span>
+            <span class="mx-6 flex items-center gap-2"><span class="bg-neo-yellow text-neo-ink px-2 py-0.5 rounded-sm font-extrabold">${name}</span> ${marqueeText}</span>
+            <span class="mx-6 flex items-center gap-2"><span class="bg-neo-mint text-neo-ink px-2 py-0.5 rounded-sm font-extrabold">MOTTO</span> "${motto}"</span>
+        `;
+    }
 }
 
 function renderDashboard() {
     const stats = calculateFinancialSummary();
     const cfg = appData.config;
 
-    document.getElementById("heroAcademicYear").innerHTML = `<i class="fa-solid fa-graduation-cap"></i> ${cfg.semesterName || "Semester Ganjil"} • TA ${cfg.academicYear || "-"}`;
-    document.getElementById("heroWaliKelas").innerHTML = `<i class="fa-solid fa-user-tie"></i> Wali Kelas: ${cfg.waliKelas || "-"}`;
-    document.getElementById("quickCheckFeeLabel").textContent = `${formatRupiah(stats.fee)} / Senin`;
+    const heroAc = document.getElementById("heroAcademicYear");
+    if (heroAc) heroAc.innerHTML = `<i class="fa-solid fa-graduation-cap"></i> ${cfg.semesterName || "Semester Ganjil"} • TA ${cfg.academicYear || "-"}`;
+    const heroWali = document.getElementById("heroWaliKelas");
+    if (heroWali) heroWali.innerHTML = `<i class="fa-solid fa-user-tie"></i> Wali Kelas: ${cfg.waliKelas || "-"}`;
+    const qcFee = document.getElementById("quickCheckFeeLabel");
+    if (qcFee) qcFee.textContent = `${formatRupiah(stats.fee)} / Senin`;
 
     const dashWaliBox = document.getElementById("dashboardWaliCard");
     if (dashWaliBox) {
@@ -1463,56 +1068,61 @@ function renderDashboard() {
     document.getElementById("kpiProgressBar").style.width = `${stats.complianceRatio}%`;
 
     const annContainer = document.getElementById("dashboardAnnouncementsList");
-    if (appData.announcements.length === 0) {
-        annContainer.innerHTML = `
-            <div class="border-2 border-dashed border-neo-ink/40 rounded-lg p-6 text-center text-xs font-bold text-muted-adaptive">
-                Belum ada pengumuman atau tugas kelas saat ini.
-            </div>
-        `;
-    } else {
-        const badgeColors = {
-            TUGAS: "bg-neo-yellow text-neo-ink",
-            KAS: "bg-neo-mint text-neo-ink",
-            PENTING: "bg-neo-coral text-white",
-            EVENT: "bg-neo-sky text-neo-ink"
-        };
-        annContainer.innerHTML = appData.announcements
-            .slice(0, 3)
-            .map(
-                (item) => `
-                <div class="border-2.5 border-neo-ink rounded-lg p-3 bg-neo-bg hover:bg-neo-surface transition space-y-1">
-                    <div class="flex flex-wrap items-center justify-between gap-2">
-                        <span class="neo-badge ${badgeColors[item.category] || "bg-white text-neo-ink"} text-[10px]">${item.category}</span>
-                        <span class="font-mono text-[11px] font-bold text-muted-adaptive"><i class="fa-regular fa-clock"></i> ${item.deadline}</span>
-                    </div>
-                    <h4 class="font-display font-extrabold text-sm">${item.title}</h4>
-                    <p class="text-xs font-medium text-muted-adaptive line-clamp-2">${item.body}</p>
+    if (annContainer) {
+        if (appData.announcements.length === 0) {
+            annContainer.innerHTML = `
+                <div class="border-2 border-dashed border-neo-ink/40 rounded-lg p-6 text-center text-xs font-bold text-muted-adaptive">
+                    Belum ada pengumuman atau tugas kelas saat ini.
                 </div>
-            `
-            )
-            .join("");
+            `;
+        } else {
+            const badgeColors = {
+                TUGAS: "bg-neo-yellow text-neo-ink",
+                KAS: "bg-neo-mint text-neo-ink",
+                PENTING: "bg-neo-coral text-white",
+                EVENT: "bg-neo-sky text-neo-ink"
+            };
+            annContainer.innerHTML = appData.announcements
+                .slice(0, 3)
+                .map(
+                    (item) => `
+                    <div class="border-2.5 border-neo-ink rounded-lg p-3 bg-neo-bg hover:bg-neo-surface transition space-y-1">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <span class="neo-badge ${badgeColors[item.category] || "bg-white text-neo-ink"} text-[10px]">${item.category}</span>
+                            <span class="font-mono text-[11px] font-bold text-muted-adaptive"><i class="fa-regular fa-clock"></i> ${item.deadline}</span>
+                        </div>
+                        <h4 class="font-display font-extrabold text-sm">${item.title}</h4>
+                        <p class="text-xs font-medium text-muted-adaptive line-clamp-2">${item.body}</p>
+                    </div>
+                `
+                )
+                .join("");
+        }
     }
 
     const dayNames = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
     const todayIdx = new Date().getDay();
     const currentDay = todayIdx >= 1 && todayIdx <= 6 ? dayNames[todayIdx] : "Senin";
-    document.getElementById("dashboardPiketDay").textContent = `Hari ${currentDay}`;
+    const piketDayEl = document.getElementById("dashboardPiketDay");
+    if (piketDayEl) piketDayEl.textContent = `Hari ${currentDay}`;
 
     const piketMembers = appData.students.filter((s) => s.piket === currentDay);
     const piketBox = document.getElementById("dashboardPiketMembers");
-    if (piketMembers.length === 0) {
-        piketBox.innerHTML = `<span class="text-xs font-bold text-muted-adaptive">Tidak ada jadwal piket tercatat.</span>`;
-    } else {
-        piketBox.innerHTML = piketMembers
-            .map(
-                (m) => `
-                <button onclick="openStudentCardModal(${m.id})" class="bg-white text-neo-ink border-2 border-neo-ink shadow-neo-sm px-2.5 py-1 rounded-md text-xs font-extrabold flex items-center gap-1.5 hover:bg-neo-yellow transition">
-                    <span class="font-mono bg-neo-ink text-white px-1.5 py-0.5 rounded text-[10px]">#${m.absen}</span>
-                    <span>${m.name}</span>
-                </button>
-            `
-            )
-            .join("");
+    if (piketBox) {
+        if (piketMembers.length === 0) {
+            piketBox.innerHTML = `<span class="text-xs font-bold text-muted-adaptive">Tidak ada jadwal piket tercatat.</span>`;
+        } else {
+            piketBox.innerHTML = piketMembers
+                .map(
+                    (m) => `
+                    <button type="button" onclick="openStudentCardModal(${m.id})" class="bg-white text-neo-ink border-2 border-neo-ink shadow-neo-sm px-2.5 py-1 rounded-md text-xs font-extrabold flex items-center gap-1.5 hover:bg-neo-yellow transition">
+                        <span class="font-mono bg-neo-ink text-white px-1.5 py-0.5 rounded text-[10px]">#${m.absen}</span>
+                        <span>${m.name}</span>
+                    </button>
+                `
+                )
+                .join("");
+        }
     }
 
     handleQuickCheck(document.getElementById("quickCheckInput")?.value || "");
@@ -1520,8 +1130,33 @@ function renderDashboard() {
 }
 
 // ============================================================================
-// FITUR BARU: ABSENSI DIGITAL (PUBLIK & ADMIN)
+// FITUR BARU: ABSENSI DIGITAL MULTI-MODE (PER HARI, PER MINGGU, PER BULAN)
 // ============================================================================
+
+const STATUS_BADGE_MAP = {
+    H: `<span class="neo-badge bg-neo-lime text-neo-ink">✓ H</span>`,
+    I: `<span class="neo-badge bg-neo-sky text-neo-ink">✉ I</span>`,
+    S: `<span class="neo-badge bg-neo-yellow text-neo-ink">✚ S</span>`,
+    A: `<span class="neo-badge bg-neo-coral text-white">✕ A</span>`
+};
+
+// --- 1. Absensi Publik (Read-Only: Harian, Mingguan, Bulanan) ---
+window.switchPublicAttendanceMode = function (mode) {
+    publicAttendanceMode = mode;
+    ["DAILY", "WEEKLY", "MONTHLY"].forEach((m) => {
+        const btn = document.getElementById(`pubAttMode-${m}`);
+        if (btn) {
+            if (m === mode) btn.classList.add("active");
+            else btn.classList.remove("active");
+        }
+    });
+
+    document.getElementById("pubAttFilterDailyWrap")?.classList.toggle("hidden", mode !== "DAILY");
+    document.getElementById("pubAttFilterWeeklyWrap")?.classList.toggle("hidden", mode !== "WEEKLY");
+    document.getElementById("pubAttFilterMonthlyWrap")?.classList.toggle("hidden", mode !== "MONTHLY");
+
+    renderPublicAttendanceView();
+};
 
 window.handlePublicAttendanceDateChange = function (val) {
     if (!val) return;
@@ -1529,96 +1164,258 @@ window.handlePublicAttendanceDateChange = function (val) {
     renderPublicAttendanceView();
 };
 
+window.handlePublicAttendanceWeekChange = function (val) {
+    if (!val) return;
+    selectedPublicAttendanceWeek = val;
+    renderPublicAttendanceView();
+};
+
+window.handlePublicAttendanceMonthChange = function (val) {
+    if (!val) return;
+    selectedPublicAttendanceMonth = val;
+    renderPublicAttendanceView();
+};
+
 window.renderPublicAttendanceView = function () {
-    const dateInput = document.getElementById("publicAttendanceDateInput");
-    if (dateInput && dateInput.value !== selectedPublicAttendanceDate) {
-        dateInput.value = selectedPublicAttendanceDate;
-    }
+    const thead = document.getElementById("pubAttTableHead");
+    const tbody = document.getElementById("pubAttTableBody");
+    if (!thead || !tbody) return;
 
     const semBadge = document.getElementById("publicAbsensiSemesterBadge");
     if (semBadge) {
         semBadge.textContent = `${appData.config.semesterName || "Semester Ganjil"} • TA ${appData.config.academicYear || "2026/2027"}`;
     }
 
-    const dayMap = appData.attendance?.[selectedPublicAttendanceDate] || {};
-    let cH = 0, cI = 0, cS = 0, cA = 0;
-
-    appData.students.forEach((s) => {
-        const st = dayMap[s.id]?.status || "";
-        if (st === "H") cH++;
-        else if (st === "I") cI++;
-        else if (st === "S") cS++;
-        else if (st === "A") cA++;
-    });
-
-    const elH = document.getElementById("pubAttCountH");
-    const elI = document.getElementById("pubAttCountI");
-    const elS = document.getElementById("pubAttCountS");
-    const elA = document.getElementById("pubAttCountA");
-    if (elH) elH.textContent = cH;
-    if (elI) elI.textContent = cI;
-    if (elS) elS.textContent = cS;
-    if (elA) elA.textContent = cA;
-
-    const subEl = document.getElementById("pubAttDateSubtitle");
-    if (subEl) subEl.textContent = `Menampilkan presensi tanggal: ${selectedPublicAttendanceDate}`;
-
-    const tbody = document.getElementById("pubAttTableBody");
-    if (!tbody) return;
+    const dInput = document.getElementById("publicAttendanceDateInput");
+    if (dInput && dInput.value !== selectedPublicAttendanceDate) dInput.value = selectedPublicAttendanceDate;
+    const wInput = document.getElementById("publicAttendanceWeekInput");
+    if (wInput && wInput.value !== selectedPublicAttendanceWeek) wInput.value = selectedPublicAttendanceWeek;
+    const mInput = document.getElementById("publicAttendanceMonthInput");
+    if (mInput && mInput.value !== selectedPublicAttendanceMonth) mInput.value = selectedPublicAttendanceMonth;
 
     const q = (document.getElementById("pubAttSearchInput")?.value || "").toLowerCase();
-    const filtered = appData.students.filter(
+    const filteredStudents = appData.students.filter(
         (s) => s.name.toLowerCase().includes(q) || String(s.absen).includes(q)
     );
 
-    if (filtered.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="py-8 text-center text-xs font-bold text-muted-adaptive">Belum ada data anggota kelas.</td></tr>`;
-        return;
+    const subEl = document.getElementById("pubAttDateSubtitle");
+    let totalH = 0, totalI = 0, totalS = 0, totalA = 0;
+
+    if (publicAttendanceMode === "DAILY") {
+        if (subEl) subEl.textContent = `Harian: ${selectedPublicAttendanceDate}`;
+        const dayMap = appData.attendance?.[selectedPublicAttendanceDate] || {};
+
+        appData.students.forEach((s) => {
+            const st = dayMap[s.id]?.status || "";
+            if (st === "H") totalH++;
+            else if (st === "I") totalI++;
+            else if (st === "S") totalS++;
+            else if (st === "A") totalA++;
+        });
+
+        thead.innerHTML = `
+            <tr>
+                <th class="py-2.5 px-2.5 border-r-2 border-neutral-700 text-center w-10">No</th>
+                <th class="py-2.5 px-3 border-r-2 border-neutral-700 min-w-[180px]">Anggota Kelas</th>
+                <th class="py-2.5 px-3 border-r-2 border-neutral-700 text-center">Status (${selectedPublicAttendanceDate})</th>
+                <th class="py-2.5 px-3 border-r-2 border-neutral-700">Catatan / Keterangan</th>
+                <th class="py-2.5 px-2.5 border-r-2 border-neutral-700 text-center">Total Semester (H/I/S/A)</th>
+                <th class="py-2.5 px-3 text-right">% Kehadiran</th>
+            </tr>
+        `;
+
+        if (filteredStudents.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="6" class="py-8 text-center text-xs font-bold text-muted-adaptive">Belum ada data anggota kelas.</td></tr>`;
+        } else {
+            tbody.innerHTML = filteredStudents
+                .map((stu) => {
+                    const rec = dayMap[stu.id] || {};
+                    const st = rec.status || "";
+                    const note = rec.note || "-";
+                    const cum = calculateStudentAttendanceStats(stu.id);
+                    return `
+                        <tr>
+                            <td class="py-2.5 px-2.5 border-r-2 border-neo-ink text-center font-mono font-extrabold">${String(stu.absen).padStart(2, "0")}</td>
+                            <td class="py-2 px-3 border-r-2 border-neo-ink">
+                                <div class="flex items-center gap-2.5">
+                                    ${renderAvatarHtml(stu.name, stu.photoUrl, "w-8 h-8", "text-[10px]")}
+                                    <div>
+                                        <div class="font-extrabold">${stu.name}</div>
+                                        <div class="text-[10px] font-mono text-muted-adaptive">${stu.role}</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="py-2 px-3 border-r-2 border-neo-ink text-center">
+                                ${STATUS_BADGE_MAP[st] || `<span class="font-mono text-[10px] text-muted-adaptive">Belum Diabsen</span>`}
+                            </td>
+                            <td class="py-2 px-3 border-r-2 border-neo-ink text-xs text-muted-adaptive">${note}</td>
+                            <td class="py-2 px-2.5 border-r-2 border-neo-ink text-center font-mono text-[11px]">
+                                <span class="text-emerald-600 font-extrabold">${cum.H}H</span> /
+                                <span class="text-sky-600 font-bold">${cum.I}I</span> /
+                                <span class="text-amber-600 font-bold">${cum.S}S</span> /
+                                <span class="text-rose-600 font-bold">${cum.A}A</span>
+                            </td>
+                            <td class="py-2 px-3 text-right font-mono font-extrabold ${cum.pct >= 80 ? "text-emerald-500" : "text-rose-500"}">${cum.pct}%</td>
+                        </tr>
+                    `;
+                })
+                .join("");
+        }
+    } else if (publicAttendanceMode === "WEEKLY") {
+        const weekDays = getSixSchoolDaysOfWeek(selectedPublicAttendanceWeek);
+        const weekIsoKeys = weekDays.map((d) => d.iso);
+        if (subEl) subEl.textContent = `Mingguan: ${weekDays[0].shortDate} s/d ${weekDays[5].shortDate}`;
+
+        appData.students.forEach((s) => {
+            const st = calculateStudentAttendanceStats(s.id, weekIsoKeys);
+            totalH += st.H;
+            totalI += st.I;
+            totalS += st.S;
+            totalA += st.A;
+        });
+
+        thead.innerHTML = `
+            <tr>
+                <th class="py-2.5 px-2.5 border-r-2 border-neutral-700 text-center w-10">No</th>
+                <th class="py-2.5 px-3 border-r-2 border-neutral-700 min-w-[170px]">Anggota Kelas</th>
+                ${weekDays
+                    .map(
+                        (d) => `
+                    <th class="py-2 px-2 border-r-2 border-neutral-700 text-center min-w-[64px]">
+                        <div class="text-[9px] text-neo-yellow">${d.dayName.toUpperCase()}</div>
+                        <div>${d.shortDate}</div>
+                    </th>
+                `
+                    )
+                    .join("")}
+                <th class="py-2.5 px-2.5 border-r-2 border-neutral-700 text-center">Rekap Minggu (H/I/S/A)</th>
+                <th class="py-2.5 px-3 text-right">% Minggu</th>
+            </tr>
+        `;
+
+        if (filteredStudents.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="10" class="py-8 text-center text-xs font-bold text-muted-adaptive">Belum ada data anggota kelas.</td></tr>`;
+        } else {
+            tbody.innerHTML = filteredStudents
+                .map((stu) => {
+                    const wkStats = calculateStudentAttendanceStats(stu.id, weekIsoKeys);
+                    return `
+                        <tr>
+                            <td class="py-2 px-2.5 border-r-2 border-neo-ink text-center font-mono font-extrabold">${String(stu.absen).padStart(2, "0")}</td>
+                            <td class="py-2 px-3 border-r-2 border-neo-ink font-extrabold">${stu.name}</td>
+                            ${weekDays
+                                .map((d) => {
+                                    const st = appData.attendance?.[d.iso]?.[stu.id]?.status || "";
+                                    return `
+                                        <td class="py-2 px-1.5 border-r-2 border-neo-ink text-center">
+                                            ${STATUS_BADGE_MAP[st] || `<span class="font-mono text-[10px] text-muted-adaptive">-</span>`}
+                                        </td>
+                                    `;
+                                })
+                                .join("")}
+                            <td class="py-2 px-2.5 border-r-2 border-neo-ink text-center font-mono text-[11px]">
+                                <span class="text-emerald-600 font-extrabold">${wkStats.H}H</span> /
+                                <span>${wkStats.I}I</span> /
+                                <span>${wkStats.S}S</span> /
+                                <span class="text-rose-600 font-bold">${wkStats.A}A</span>
+                            </td>
+                            <td class="py-2 px-3 text-right font-mono font-extrabold ${wkStats.pct >= 80 ? "text-emerald-500" : "text-rose-500"}">${wkStats.pct}%</td>
+                        </tr>
+                    `;
+                })
+                .join("");
+        }
+    } else {
+        // MONTHLY MODE
+        const monthPrefix = selectedPublicAttendanceMonth || toLocalISOMonth();
+        const monthDates = Object.keys(appData.attendance || {})
+            .filter((d) => d.startsWith(monthPrefix))
+            .sort();
+
+        if (subEl) subEl.textContent = `Bulanan: ${formatMonthTitle(monthPrefix)} (${monthDates.length} Hari Tercatat)`;
+
+        appData.students.forEach((s) => {
+            const st = calculateStudentAttendanceStats(s.id, monthDates);
+            totalH += st.H;
+            totalI += st.I;
+            totalS += st.S;
+            totalA += st.A;
+        });
+
+        thead.innerHTML = `
+            <tr>
+                <th class="py-2.5 px-2.5 border-r-2 border-neutral-700 text-center w-10">No</th>
+                <th class="py-2.5 px-3 border-r-2 border-neutral-700 min-w-[180px]">Anggota Kelas</th>
+                ${monthDates
+                    .map(
+                        (d) => `
+                    <th class="py-2 px-1.5 border-r-2 border-neutral-700 text-center min-w-[46px]">
+                        <div class="text-[9px] text-neo-yellow">TGL</div>
+                        <div>${d.split("-")[2]}</div>
+                    </th>
+                `
+                    )
+                    .join("")}
+                <th class="py-2.5 px-2.5 border-r-2 border-neutral-700 text-center">Hadir (H)</th>
+                <th class="py-2.5 px-2.5 border-r-2 border-neutral-700 text-center">Izin (I)</th>
+                <th class="py-2.5 px-2.5 border-r-2 border-neutral-700 text-center">Sakit (S)</th>
+                <th class="py-2.5 px-2.5 border-r-2 border-neutral-700 text-center">Alfa (A)</th>
+                <th class="py-2.5 px-3 text-right">% Bulan Ini</th>
+            </tr>
+        `;
+
+        if (filteredStudents.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="${monthDates.length + 7}" class="py-8 text-center text-xs font-bold text-muted-adaptive">Belum ada data anggota kelas.</td></tr>`;
+        } else {
+            tbody.innerHTML = filteredStudents
+                .map((stu) => {
+                    const mStats = calculateStudentAttendanceStats(stu.id, monthDates);
+                    return `
+                        <tr>
+                            <td class="py-2 px-2.5 border-r-2 border-neo-ink text-center font-mono font-extrabold">${String(stu.absen).padStart(2, "0")}</td>
+                            <td class="py-2 px-3 border-r-2 border-neo-ink font-extrabold">${stu.name}</td>
+                            ${monthDates
+                                .map((d) => {
+                                    const st = appData.attendance?.[d]?.[stu.id]?.status || "-";
+                                    const bg = st === "H" ? "bg-neo-lime text-neo-ink" : st === "I" ? "bg-neo-sky text-neo-ink" : st === "S" ? "bg-neo-yellow text-neo-ink" : st === "A" ? "bg-neo-coral text-white" : "";
+                                    return `<td class="py-1.5 px-1 border-r-2 border-neo-ink text-center font-mono text-[10px] font-extrabold"><span class="px-1.5 py-0.5 rounded ${bg}">${st}</span></td>`;
+                                })
+                                .join("")}
+                            <td class="py-2 px-2.5 border-r-2 border-neo-ink text-center font-mono font-extrabold text-emerald-500">${mStats.H}</td>
+                            <td class="py-2 px-2.5 border-r-2 border-neo-ink text-center font-mono font-bold text-sky-500">${mStats.I}</td>
+                            <td class="py-2 px-2.5 border-r-2 border-neo-ink text-center font-mono font-bold text-amber-500">${mStats.S}</td>
+                            <td class="py-2 px-2.5 border-r-2 border-neo-ink text-center font-mono font-extrabold text-rose-500">${mStats.A}</td>
+                            <td class="py-2 px-3 text-right font-mono font-extrabold ${mStats.pct >= 80 ? "text-emerald-500" : "text-rose-500"}">${mStats.pct}%</td>
+                        </tr>
+                    `;
+                })
+                .join("");
+        }
     }
 
-    const statusBadgeMap = {
-        H: `<span class="neo-badge bg-neo-lime text-neo-ink">✓ HADIR</span>`,
-        I: `<span class="neo-badge bg-neo-sky text-neo-ink">✉ IZIN</span>`,
-        S: `<span class="neo-badge bg-neo-yellow text-neo-ink">✚ SAKIT</span>`,
-        A: `<span class="neo-badge bg-neo-coral text-white">✕ ALFA</span>`
-    };
+    document.getElementById("pubAttCountH").textContent = totalH;
+    document.getElementById("pubAttCountI").textContent = totalI;
+    document.getElementById("pubAttCountS").textContent = totalS;
+    document.getElementById("pubAttCountA").textContent = totalA;
+};
 
-    tbody.innerHTML = filtered
-        .map((stu) => {
-            const rec = dayMap[stu.id] || {};
-            const st = rec.status || "";
-            const note = rec.note || "-";
-            const cum = calculateStudentAttendanceStats(stu.id);
+// --- 2. Absensi Admin (Interaktif Penuh: Harian, Mingguan, Bulanan) ---
+window.switchAdminAttendanceMode = function (mode) {
+    adminAttendanceMode = mode;
+    ["DAILY", "WEEKLY", "MONTHLY"].forEach((m) => {
+        const btn = document.getElementById(`admAttMode-${m}`);
+        if (btn) {
+            if (m === mode) btn.classList.add("active");
+            else btn.classList.remove("active");
+        }
+    });
 
-            return `
-                <tr>
-                    <td class="py-2.5 px-2.5 border-r-2 border-neo-ink text-center font-mono font-extrabold">${String(stu.absen).padStart(2, "0")}</td>
-                    <td class="py-2 px-3 border-r-2 border-neo-ink">
-                        <div class="flex items-center gap-2.5">
-                            ${renderAvatarHtml(stu.name, stu.photoUrl, "w-8 h-8", "text-[10px]")}
-                            <div>
-                                <div class="font-extrabold">${stu.name}</div>
-                                <div class="text-[10px] font-mono text-muted-adaptive">${stu.role}</div>
-                            </div>
-                        </div>
-                    </td>
-                    <td class="py-2 px-3 border-r-2 border-neo-ink text-center">
-                        ${statusBadgeMap[st] || `<span class="font-mono text-[10px] text-muted-adaptive">Belum Diabsen</span>`}
-                    </td>
-                    <td class="py-2 px-3 border-r-2 border-neo-ink text-xs text-muted-adaptive">${note}</td>
-                    <td class="py-2 px-2.5 border-r-2 border-neo-ink text-center font-mono text-[11px]">
-                        <span class="text-emerald-600 font-extrabold">${cum.H}H</span> /
-                        <span class="text-sky-600 font-bold">${cum.I}I</span> /
-                        <span class="text-amber-600 font-bold">${cum.S}S</span> /
-                        <span class="text-rose-600 font-bold">${cum.A}A</span>
-                    </td>
-                    <td class="py-2 px-3 text-right font-mono font-extrabold ${cum.pct >= 80 ? "text-emerald-500" : "text-rose-500"}">
-                        ${cum.pct}%
-                    </td>
-                </tr>
-            `;
-        })
-        .join("");
+    document.getElementById("admAttDailyWrap")?.classList.toggle("hidden", mode !== "DAILY");
+    document.getElementById("admAttWeeklyWrap")?.classList.toggle("hidden", mode !== "WEEKLY");
+    document.getElementById("admAttMonthlyWrap")?.classList.toggle("hidden", mode !== "MONTHLY");
+    document.getElementById("btnMarkAllPresentAdmin")?.classList.toggle("hidden", mode !== "DAILY");
+
+    renderAdminAttendanceSection();
 };
 
 window.handleAdminAttendanceDateChange = function (val) {
@@ -1627,92 +1424,288 @@ window.handleAdminAttendanceDateChange = function (val) {
     renderAdminAttendanceSection();
 };
 
+window.handleAdminAttendanceWeekChange = function (val) {
+    if (!val) return;
+    selectedAttendanceWeek = val;
+    renderAdminAttendanceSection();
+};
+
+window.handleAdminAttendanceMonthChange = function (val) {
+    if (!val) return;
+    selectedAttendanceMonth = val;
+    renderAdminAttendanceSection();
+};
+
 function renderAdminAttendanceSection() {
-    const dateInput = document.getElementById("admAttendanceDateInput");
-    if (dateInput && dateInput.value !== selectedAttendanceDate) {
-        dateInput.value = selectedAttendanceDate;
-    }
+    const thead = document.getElementById("admAttendanceTableHead");
+    const tbody = document.getElementById("admAttendanceTableBody");
+    if (!thead || !tbody) return;
+
+    const dInput = document.getElementById("admAttendanceDateInput");
+    if (dInput && dInput.value !== selectedAttendanceDate) dInput.value = selectedAttendanceDate;
+    const wInput = document.getElementById("admAttendanceWeekInput");
+    if (wInput && wInput.value !== selectedAttendanceWeek) wInput.value = selectedAttendanceWeek;
+    const mInput = document.getElementById("admAttendanceMonthInput");
+    if (mInput && mInput.value !== selectedAttendanceMonth) mInput.value = selectedAttendanceMonth;
 
     const titleEl = document.getElementById("admAttendanceTableTitle");
-    if (titleEl) titleEl.textContent = `Lembar Presensi Tanggal: ${selectedAttendanceDate}`;
+    const q = (document.getElementById("admAttSearchInput")?.value || "").toLowerCase();
+    const filteredStudents = appData.students.filter(
+        (s) => s.name.toLowerCase().includes(q) || String(s.absen).includes(q)
+    );
 
-    const tbody = document.getElementById("admAttendanceTableBody");
-    if (!tbody) return;
+    let totalH = 0, totalI = 0, totalS = 0, totalA = 0;
 
-    if (appData.students.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-xs font-bold text-muted-adaptive">Tambahkan anggota kelas terlebih dahulu di modul Anggota & Struktur.</td></tr>`;
-        return;
+    if (adminAttendanceMode === "DAILY") {
+        if (titleEl) titleEl.textContent = `Input Presensi Harian — Tanggal: ${selectedAttendanceDate}`;
+        const dayMap = appData.attendance?.[selectedAttendanceDate] || {};
+
+        appData.students.forEach((s) => {
+            const st = dayMap[s.id]?.status || "";
+            if (st === "H") totalH++;
+            else if (st === "I") totalI++;
+            else if (st === "S") totalS++;
+            else if (st === "A") totalA++;
+        });
+
+        thead.innerHTML = `
+            <tr>
+                <th class="py-2.5 px-2.5 border-r-2 border-neutral-700 text-center w-10">No</th>
+                <th class="py-2.5 px-3 border-r-2 border-neutral-700 min-w-[170px]">Nama Anggota</th>
+                <th class="py-2.5 px-3 border-r-2 border-neutral-700 text-center min-w-[210px]">Pilih Status (${selectedAttendanceDate})</th>
+                <th class="py-2.5 px-3 border-r-2 border-neutral-700 min-w-[180px]">Catatan (Surat/Alasan)</th>
+                <th class="py-2.5 px-2.5 text-center">Rekap Semester (H/I/S/A)</th>
+            </tr>
+        `;
+
+        if (filteredStudents.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-xs font-bold text-muted-adaptive">Belum ada anggota kelas terdaftar.</td></tr>`;
+        } else {
+            tbody.innerHTML = filteredStudents
+                .map((stu) => {
+                    const rec = dayMap[stu.id] || { status: "", note: "" };
+                    const curSt = rec.status || "";
+                    const cum = calculateStudentAttendanceStats(stu.id);
+
+                    const btnClass = (code, activeBg) =>
+                        curSt === code
+                            ? `${activeBg} text-neo-ink font-extrabold ring-2 ring-neo-ink scale-105`
+                            : `bg-neo-surface text-muted-adaptive opacity-75 hover:opacity-100`;
+
+                    return `
+                        <tr>
+                            <td class="py-2 px-2.5 border-r-2 border-neo-ink text-center font-mono font-extrabold">#${String(stu.absen).padStart(2, "0")}</td>
+                            <td class="py-2 px-3 border-r-2 border-neo-ink font-extrabold">${stu.name}</td>
+                            <td class="py-2 px-2.5 border-r-2 border-neo-ink text-center">
+                                <div class="inline-flex items-center gap-1.5">
+                                    <button type="button" onclick="setStudentAttendanceStatus(${stu.id}, 'H', '${selectedAttendanceDate}')" class="px-2.5 py-1 rounded border-2 border-neo-ink font-mono text-xs transition ${btnClass("H", "bg-neo-lime")}">H</button>
+                                    <button type="button" onclick="setStudentAttendanceStatus(${stu.id}, 'I', '${selectedAttendanceDate}')" class="px-2.5 py-1 rounded border-2 border-neo-ink font-mono text-xs transition ${btnClass("I", "bg-neo-sky")}">I</button>
+                                    <button type="button" onclick="setStudentAttendanceStatus(${stu.id}, 'S', '${selectedAttendanceDate}')" class="px-2.5 py-1 rounded border-2 border-neo-ink font-mono text-xs transition ${btnClass("S", "bg-neo-yellow")}">S</button>
+                                    <button type="button" onclick="setStudentAttendanceStatus(${stu.id}, 'A', '${selectedAttendanceDate}')" class="px-2.5 py-1 rounded border-2 border-neo-ink font-mono text-xs transition ${btnClass("A", "bg-neo-coral text-white")}">A</button>
+                                </div>
+                            </td>
+                            <td class="py-1.5 px-2.5 border-r-2 border-neo-ink">
+                                <input
+                                    type="text"
+                                    value="${(rec.note || "").replace(/"/g, "&quot;")}"
+                                    onchange="setStudentAttendanceNote(${stu.id}, this.value, '${selectedAttendanceDate}')"
+                                    placeholder="Ketik alasan / keterangan..."
+                                    class="neo-input w-full px-2.5 py-1 text-xs"
+                                >
+                            </td>
+                            <td class="py-2 px-2.5 text-center font-mono text-[11px]">
+                                <span class="text-emerald-600 font-extrabold">${cum.H}H</span> •
+                                <span>${cum.I}I</span> •
+                                <span>${cum.S}S</span> •
+                                <span class="text-rose-600 font-bold">${cum.A}A</span>
+                            </td>
+                        </tr>
+                    `;
+                })
+                .join("");
+        }
+    } else if (adminAttendanceMode === "WEEKLY") {
+        const weekDays = getSixSchoolDaysOfWeek(selectedAttendanceWeek);
+        const weekIsoKeys = weekDays.map((d) => d.iso);
+        if (titleEl) titleEl.textContent = `Matriks Absensi Mingguan (${weekDays[0].shortDate} s/d ${weekDays[5].shortDate}) — Klik Sel untuk Ubah Status`;
+
+        appData.students.forEach((s) => {
+            const st = calculateStudentAttendanceStats(s.id, weekIsoKeys);
+            totalH += st.H;
+            totalI += st.I;
+            totalS += st.S;
+            totalA += st.A;
+        });
+
+        thead.innerHTML = `
+            <tr>
+                <th class="py-2 px-2 border-r-2 border-neutral-700 text-center w-10">No</th>
+                <th class="py-2 px-3 border-r-2 border-neutral-700 min-w-[165px]">Nama Anggota</th>
+                ${weekDays
+                    .map(
+                        (d) => `
+                    <th class="py-2 px-1.5 border-r-2 border-neutral-700 text-center min-w-[64px]">
+                        <div class="text-[9px] text-neo-yellow">${d.dayName.toUpperCase()}</div>
+                        <div>${d.shortDate}</div>
+                    </th>
+                `
+                    )
+                    .join("")}
+                <th class="py-2 px-2.5 text-center">Total Minggu Ini</th>
+            </tr>
+        `;
+
+        if (filteredStudents.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="9" class="py-8 text-center text-xs font-bold text-muted-adaptive">Belum ada anggota kelas.</td></tr>`;
+        } else {
+            tbody.innerHTML = filteredStudents
+                .map((stu) => {
+                    const wkStats = calculateStudentAttendanceStats(stu.id, weekIsoKeys);
+                    return `
+                        <tr>
+                            <td class="py-2 px-2 border-r-2 border-neo-ink text-center font-mono font-bold">#${stu.absen}</td>
+                            <td class="py-2 px-3 border-r-2 border-neo-ink font-extrabold">${stu.name}</td>
+                            ${weekDays
+                                .map((d) => {
+                                    const st = appData.attendance?.[d.iso]?.[stu.id]?.status || "";
+                                    const bg =
+                                        st === "H"
+                                            ? "bg-neo-lime text-neo-ink"
+                                            : st === "I"
+                                              ? "bg-neo-sky text-neo-ink"
+                                              : st === "S"
+                                                ? "bg-neo-yellow text-neo-ink"
+                                                : st === "A"
+                                                  ? "bg-neo-coral text-white"
+                                                  : "bg-neo-surface text-muted-adaptive";
+                                    return `
+                                        <td class="p-1 border-r-2 border-neo-ink text-center">
+                                            <button
+                                                type="button"
+                                                onclick="cycleStudentAttendanceStatus(${stu.id}, '${d.iso}')"
+                                                title="Klik untuk ganti status (${d.dayName}, ${d.iso})"
+                                                class="w-full py-1 px-1 rounded border border-neo-ink font-mono text-[10px] font-extrabold ${bg}"
+                                            >
+                                                ${st || "-"}
+                                            </button>
+                                        </td>
+                                    `;
+                                })
+                                .join("")}
+                            <td class="py-2 px-2.5 text-center font-mono text-[11px]">
+                                <span class="text-emerald-600 font-extrabold">${wkStats.H}H</span>/${wkStats.I}I/${wkStats.S}S/<span class="text-rose-600 font-bold">${wkStats.A}A</span>
+                            </td>
+                        </tr>
+                    `;
+                })
+                .join("");
+        }
+    } else {
+        // ADMIN MONTHLY MODE
+        const monthPrefix = selectedAttendanceMonth || toLocalISOMonth();
+        const monthDates = Object.keys(appData.attendance || {})
+            .filter((d) => d.startsWith(monthPrefix))
+            .sort();
+
+        if (titleEl) titleEl.textContent = `Rekapitulasi Absensi Bulan ${formatMonthTitle(monthPrefix)} (${monthDates.length} Hari Tercatat)`;
+
+        appData.students.forEach((s) => {
+            const st = calculateStudentAttendanceStats(s.id, monthDates);
+            totalH += st.H;
+            totalI += st.I;
+            totalS += st.S;
+            totalA += st.A;
+        });
+
+        thead.innerHTML = `
+            <tr>
+                <th class="py-2.5 px-2.5 border-r-2 border-neutral-700 text-center w-10">No</th>
+                <th class="py-2.5 px-3 border-r-2 border-neutral-700 min-w-[175px]">Nama Anggota</th>
+                ${monthDates
+                    .map(
+                        (d) => `
+                    <th class="py-2 px-1.5 border-r-2 border-neutral-700 text-center min-w-[46px]">
+                        <div class="text-[9px] text-neo-yellow">TGL</div>
+                        <div>${d.split("-")[2]}</div>
+                    </th>
+                `
+                    )
+                    .join("")}
+                <th class="py-2.5 px-2 border-r-2 border-neutral-700 text-center">H</th>
+                <th class="py-2.5 px-2 border-r-2 border-neutral-700 text-center">I</th>
+                <th class="py-2.5 px-2 border-r-2 border-neutral-700 text-center">S</th>
+                <th class="py-2.5 px-2 border-r-2 border-neutral-700 text-center">A</th>
+                <th class="py-2.5 px-3 text-right">% Bulan</th>
+            </tr>
+        `;
+
+        if (filteredStudents.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="${monthDates.length + 7}" class="py-8 text-center text-xs font-bold text-muted-adaptive">Belum ada anggota kelas.</td></tr>`;
+        } else {
+            tbody.innerHTML = filteredStudents
+                .map((stu) => {
+                    const mStats = calculateStudentAttendanceStats(stu.id, monthDates);
+                    return `
+                        <tr>
+                            <td class="py-2 px-2.5 border-r-2 border-neo-ink text-center font-mono font-extrabold">#${String(stu.absen).padStart(2, "0")}</td>
+                            <td class="py-2 px-3 border-r-2 border-neo-ink font-extrabold">${stu.name}</td>
+                            ${monthDates
+                                .map((d) => {
+                                    const st = appData.attendance?.[d]?.[stu.id]?.status || "-";
+                                    const bg = st === "H" ? "bg-neo-lime text-neo-ink" : st === "I" ? "bg-neo-sky text-neo-ink" : st === "S" ? "bg-neo-yellow text-neo-ink" : st === "A" ? "bg-neo-coral text-white" : "bg-neo-surface";
+                                    return `
+                                        <td class="p-1 border-r-2 border-neo-ink text-center">
+                                            <button type="button" onclick="cycleStudentAttendanceStatus(${stu.id}, '${d}')" class="w-full py-0.5 px-1 rounded border border-neo-ink font-mono text-[10px] font-extrabold ${bg}">${st}</button>
+                                        </td>
+                                    `;
+                                })
+                                .join("")}
+                            <td class="py-2 px-2 border-r-2 border-neo-ink text-center font-mono font-extrabold text-emerald-500">${mStats.H}</td>
+                            <td class="py-2 px-2 border-r-2 border-neo-ink text-center font-mono font-bold text-sky-500">${mStats.I}</td>
+                            <td class="py-2 px-2 border-r-2 border-neo-ink text-center font-mono font-bold text-amber-500">${mStats.S}</td>
+                            <td class="py-2 px-2 border-r-2 border-neo-ink text-center font-mono font-extrabold text-rose-500">${mStats.A}</td>
+                            <td class="py-2 px-3 text-right font-mono font-extrabold ${mStats.pct >= 80 ? "text-emerald-500" : "text-rose-500"}">${mStats.pct}%</td>
+                        </tr>
+                    `;
+                })
+                .join("");
+        }
     }
 
-    if (!appData.attendance) appData.attendance = {};
-    const dayMap = appData.attendance[selectedAttendanceDate] || {};
-
-    tbody.innerHTML = appData.students
-        .map((stu) => {
-            const rec = dayMap[stu.id] || { status: "", note: "" };
-            const curSt = rec.status || "";
-            const cum = calculateStudentAttendanceStats(stu.id);
-
-            const btnClass = (code, activeBg) =>
-                curSt === code
-                    ? `${activeBg} text-neo-ink font-extrabold ring-2 ring-neo-ink scale-105`
-                    : `bg-neo-surface text-muted-adaptive opacity-75 hover:opacity-100`;
-
-            return `
-                <tr>
-                    <td class="py-2 px-2.5 border-r-2 border-neo-ink text-center font-mono font-extrabold">#${String(stu.absen).padStart(2, "0")}</td>
-                    <td class="py-2 px-3 border-r-2 border-neo-ink font-extrabold">${stu.name}</td>
-                    <td class="py-2 px-2.5 border-r-2 border-neo-ink text-center">
-                        <div class="inline-flex items-center gap-1.5">
-                            <button type="button" onclick="setStudentAttendanceStatus(${stu.id}, 'H')" class="px-2.5 py-1 rounded border-2 border-neo-ink font-mono text-xs transition ${btnClass("H", "bg-neo-lime")}">H</button>
-                            <button type="button" onclick="setStudentAttendanceStatus(${stu.id}, 'I')" class="px-2.5 py-1 rounded border-2 border-neo-ink font-mono text-xs transition ${btnClass("I", "bg-neo-sky")}">I</button>
-                            <button type="button" onclick="setStudentAttendanceStatus(${stu.id}, 'S')" class="px-2.5 py-1 rounded border-2 border-neo-ink font-mono text-xs transition ${btnClass("S", "bg-neo-yellow")}">S</button>
-                            <button type="button" onclick="setStudentAttendanceStatus(${stu.id}, 'A')" class="px-2.5 py-1 rounded border-2 border-neo-ink font-mono text-xs transition ${btnClass("A", "bg-neo-coral text-white")}">A</button>
-                        </div>
-                    </td>
-                    <td class="py-1.5 px-2.5 border-r-2 border-neo-ink">
-                        <input
-                            type="text"
-                            value="${(rec.note || "").replace(/"/g, "&quot;")}"
-                            onchange="setStudentAttendanceNote(${stu.id}, this.value)"
-                            placeholder="Ketik alasan / keterangan..."
-                            class="neo-input w-full px-2.5 py-1 text-xs"
-                        >
-                    </td>
-                    <td class="py-2 px-2.5 text-center font-mono text-[11px]">
-                        <span class="text-emerald-600 font-extrabold">${cum.H}H</span> •
-                        <span>${cum.I}I</span> •
-                        <span>${cum.S}S</span> •
-                        <span class="text-rose-600 font-bold">${cum.A}A</span>
-                    </td>
-                </tr>
-            `;
-        })
-        .join("");
+    document.getElementById("admAttCountH").textContent = totalH;
+    document.getElementById("admAttCountI").textContent = totalI;
+    document.getElementById("admAttCountS").textContent = totalS;
+    document.getElementById("admAttCountA").textContent = totalA;
 }
 
-window.setStudentAttendanceStatus = async function (studentId, status) {
+window.setStudentAttendanceStatus = async function (studentId, status, targetDate = selectedAttendanceDate) {
     if (!canEditInCurrentView("absensi")) return;
     if (!appData.attendance) appData.attendance = {};
-    if (!appData.attendance[selectedAttendanceDate]) {
-        appData.attendance[selectedAttendanceDate] = {};
-    }
-    const existing = appData.attendance[selectedAttendanceDate][studentId] || { status: "", note: "" };
+    if (!appData.attendance[targetDate]) appData.attendance[targetDate] = {};
+
+    const existing = appData.attendance[targetDate][studentId] || { status: "", note: "" };
     existing.status = status;
-    appData.attendance[selectedAttendanceDate][studentId] = existing;
+    appData.attendance[targetDate][studentId] = existing;
     await saveToCloudDatabase();
     renderAdminAttendanceSection();
 };
 
-window.setStudentAttendanceNote = async function (studentId, noteText) {
+window.cycleStudentAttendanceStatus = async function (studentId, targetDate) {
+    if (!canEditInCurrentView("absensi")) return;
+    const order = ["H", "I", "S", "A"];
+    const cur = appData.attendance?.[targetDate]?.[studentId]?.status || "";
+    const nextIdx = (order.indexOf(cur) + 1) % order.length;
+    await window.setStudentAttendanceStatus(studentId, order[nextIdx], targetDate);
+};
+
+window.setStudentAttendanceNote = async function (studentId, noteText, targetDate = selectedAttendanceDate) {
     if (!canEditInCurrentView("absensi")) return;
     if (!appData.attendance) appData.attendance = {};
-    if (!appData.attendance[selectedAttendanceDate]) {
-        appData.attendance[selectedAttendanceDate] = {};
-    }
-    const existing = appData.attendance[selectedAttendanceDate][studentId] || { status: "H", note: "" };
+    if (!appData.attendance[targetDate]) appData.attendance[targetDate] = {};
+
+    const existing = appData.attendance[targetDate][studentId] || { status: "H", note: "" };
     existing.note = noteText.trim();
-    appData.attendance[selectedAttendanceDate][studentId] = existing;
+    appData.attendance[targetDate][studentId] = existing;
     await saveToCloudDatabase();
 };
 
@@ -1735,13 +1728,13 @@ window.markAllAttendancePresent = async function () {
 
 window.saveCurrentDayAttendance = async function () {
     if (!canEditInCurrentView("absensi")) return;
-    await saveToCloudDatabase(`Data absensi tanggal ${selectedAttendanceDate} berhasil disimpan ke Firebase!`);
+    await saveToCloudDatabase(`Rekap absensi berhasil disimpan ke Firebase!`);
 };
 
 window.downloadAttendanceExcelSheet = function () {
     const cfg = appData.config;
     const attDates = Object.keys(appData.attendance || {}).sort();
-    const totalCols = attDates.length + 7;
+    const totalCols = attDates.length + 8;
 
     const rowsHtml = appData.students
         .map((s) => {
@@ -1814,7 +1807,7 @@ window.downloadAttendanceExcelSheet = function () {
 };
 
 // ============================================================================
-// FITUR BARU: MULAI SEMESTER BARU & ARSIP SEMESTER LALU
+// FITUR MATANG: MULAI SEMESTER BARU & BRANKAS ARSIP SEMESTER
 // ============================================================================
 
 function renderSemesterArchivesSection() {
@@ -1834,6 +1827,11 @@ function renderSemesterArchivesSection() {
         acInput.value = cfg.academicYear || "2026/2027";
     }
 
+    const feeInput = document.getElementById("newSemesterWeeklyFee");
+    if (feeInput && !feeInput.value) {
+        feeInput.value = cfg.weeklyFee || 5000;
+    }
+
     const startInput = document.getElementById("newSemesterStartDate");
     const endInput = document.getElementById("newSemesterEndDate");
     if (startInput && !startInput.value) startInput.value = defaultRange.start;
@@ -1848,8 +1846,8 @@ function renderSemesterArchivesSection() {
 
     if (archives.length === 0) {
         listBox.innerHTML = `
-            <div class="border-2 border-dashed border-neo-ink/40 rounded-xl p-6 text-center text-xs font-bold text-muted-adaptive">
-                Belum ada arsip semester terdahulu. Saat Anda menekan tombol "Arsipkan Semester Ini & Mulai Baru", seluruh rekaman kas & absensi semester berjalan akan tersimpan aman di sini.
+            <div class="border-2.5 border-dashed border-neo-ink/40 rounded-xl p-6 text-center text-xs font-bold text-muted-adaptive">
+                Brankas arsip masih kosong. Saat Anda memulai semester baru, seluruh data kas, matriks iuran Senin, dan rekap absensi semester lalu akan tersimpan utuh di sini.
             </div>
         `;
         return;
@@ -1861,13 +1859,13 @@ function renderSemesterArchivesSection() {
             <div class="neo-card bg-neo-bg p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div class="space-y-1">
                     <div class="flex flex-wrap items-center gap-2">
-                        <span class="neo-badge bg-neo-yellow text-neo-ink text-[10px]">${arc.label}</span>
+                        <span class="neo-badge bg-neo-yellow text-neo-ink text-[10px]"><i class="fa-solid fa-folder-closed"></i> ${arc.label}</span>
                         <span class="font-mono text-[10px] font-bold text-muted-adaptive">Diarsipkan: ${arc.archivedAt}</span>
                     </div>
                     <div class="text-xs font-extrabold">
-                        Saldo Akhir: <span class="font-mono text-emerald-600">${formatRupiah(arc.summary?.currentBalance || 0)}</span> •
-                        Masuk: <span class="font-mono">${formatRupiah(arc.summary?.totalIncome || 0)}</span> •
-                        Keluar: <span class="font-mono text-rose-500">${formatRupiah(arc.summary?.totalExpense || 0)}</span>
+                        Saldo Akhir: <span class="font-mono text-emerald-500">${formatRupiah(arc.summary?.currentBalance || 0)}</span> •
+                        Total Masuk: <span class="font-mono">${formatRupiah(arc.summary?.totalIncome || 0)}</span> •
+                        Total Keluar: <span class="font-mono text-rose-500">${formatRupiah(arc.summary?.totalExpense || 0)}</span>
                     </div>
                     <div class="text-[11px] font-mono text-muted-adaptive">
                         ${(arc.students || []).length} Anggota • ${(arc.transactions || []).length} Transaksi Kas • ${Object.keys(arc.attendance || {}).length} Hari Absensi
@@ -1877,7 +1875,7 @@ function renderSemesterArchivesSection() {
                     <button type="button" onclick="downloadArchivedSemesterExcel(${arc.id})" class="neo-btn bg-neo-yellow text-neo-ink px-2.5 py-1.5 text-[11px]" title="Unduh Laporan Sheet Arsip Ini">
                         <i class="fa-solid fa-file-excel"></i> Sheet (.xls)
                     </button>
-                    <button type="button" onclick="restoreArchivedSemester(${arc.id})" class="neo-btn bg-neo-sky text-neo-ink px-2.5 py-1.5 text-[11px]" title="Buka / Pulihkan Data Semester Ini">
+                    <button type="button" onclick="restoreArchivedSemester(${arc.id})" class="neo-btn bg-neo-sky text-neo-ink px-2.5 py-1.5 text-[11px]" title="Aktifkan Kembali Semester Ini">
                         <i class="fa-solid fa-rotate-left"></i> Pulihkan
                     </button>
                     <button type="button" onclick="deleteArchivedSemester(${arc.id})" class="neo-btn bg-rose-200 text-rose-900 px-2.5 py-1.5 text-[11px]" title="Hapus Arsip">
@@ -1893,12 +1891,18 @@ function renderSemesterArchivesSection() {
 window.handleStartNewSemester = async function () {
     if (!canEditInCurrentView("pengaturan")) return;
 
-    const archiveLabel = (document.getElementById("archiveCurrentLabelInput")?.value || "").trim() ||
-        `${appData.config.semesterName || "Semester Ganjil"} ${appData.config.academicYear || "2026/2027"}`;
+    const archiveLabel =
+        (document.getElementById("archiveCurrentLabelInput")?.value || "").trim() ||
+        `${appData.config.semesterName || "Semester Ganjil"} TA ${appData.config.academicYear || "2026/2027"}`;
     const newSemName = document.getElementById("newSemesterNameSelect")?.value || "Semester Genap";
     const newAcYear = (document.getElementById("newSemesterAcYearInput")?.value || "").trim() || appData.config.academicYear;
     const newStart = document.getElementById("newSemesterStartDate")?.value || defaultRange.start;
     const newEnd = document.getElementById("newSemesterEndDate")?.value || defaultRange.end;
+    const newFee = Number(document.getElementById("newSemesterWeeklyFee")?.value) || appData.config.weeklyFee || 5000;
+
+    const keepStructure = document.getElementById("newSemesterKeepStructure")?.checked ?? true;
+    const keepSchedule = document.getElementById("newSemesterKeepSchedule")?.checked ?? true;
+    const carryBalance = document.getElementById("newSemesterCarryBalance")?.checked ?? false;
 
     if (new Date(newEnd) < new Date(newStart)) {
         showToast("Tanggal Akhir Kas Semester Baru harus setelah Tanggal Awal!", "bg-neo-coral");
@@ -1907,7 +1911,7 @@ window.handleStartNewSemester = async function () {
 
     const stats = calculateFinancialSummary();
 
-    // 1. Simpan snapshot lengkap semester saat ini ke dalam `appData.archives`
+    // 1. Simpan snapshot utuh semester berjalan ke dalam brankas `appData.archives`
     if (!Array.isArray(appData.archives)) appData.archives = [];
     appData.archives.unshift({
         id: Date.now(),
@@ -1922,23 +1926,55 @@ window.handleStartNewSemester = async function () {
         schedule: JSON.parse(JSON.stringify(appData.schedule || {}))
     });
 
-    // 2. Reset pelunasan kas mingguan, transaksi kas, absensi harian & tugas untuk semester baru
-    //    (Daftar nama anggota, foto profil, jabatan, dan album kenangan tetap utuh!)
+    // 2. Siapkan daftar siswa untuk semester baru (Reset status bayar Senin)
     appData.students.forEach((s) => {
         s.paidDates = {};
         delete s.weeks;
+        if (!keepStructure) {
+            s.role = "Anggota Kelas";
+        }
     });
+
+    // 3. Siapkan transaksi kas baru (Opsi bawa sisa saldo akhir semester lalu)
     appData.transactions = [];
+    if (carryBalance && stats.currentBalance > 0) {
+        appData.transactions.push({
+            id: Date.now() + 1,
+            type: "MASUK",
+            date: newStart,
+            category: "Dana Usaha / Kas Masuk",
+            amount: stats.currentBalance,
+            desc: `Saldo Awal Kas (Pindahan Sisa Saldo ${archiveLabel})`,
+            pic: currentAdmin ? currentAdmin.name : "Bendahara Kelas"
+        });
+    }
+
+    // 4. Reset pengumuman & absensi untuk lembaran semester baru
     appData.announcements = [];
     appData.attendance = {};
 
-    // 3. Perbarui konfigurasi ke semester baru
+    if (!keepSchedule) {
+        appData.schedule = {
+            Senin: [],
+            Selasa: [],
+            Rabu: [],
+            Kamis: [],
+            Jumat: [],
+            Sabtu: []
+        };
+    }
+
+    // 5. Terapkan konfigurasi semester baru
     appData.config.semesterName = newSemName;
     appData.config.academicYear = newAcYear;
     appData.config.feeStartDate = newStart;
     appData.config.feeEndDate = newEnd;
+    appData.config.weeklyFee = newFee;
 
-    await saveToCloudDatabase(`Semester "${archiveLabel}" berhasil diarsipkan! Selamat datang di ${newSemName} TA ${newAcYear}.`);
+    const labelEl = document.getElementById("archiveCurrentLabelInput");
+    if (labelEl) labelEl.value = `${newSemName} TA ${newAcYear}`;
+
+    await saveToCloudDatabase(`Semester "${archiveLabel}" berhasil diarsipkan! Sekarang aktif: ${newSemName} TA ${newAcYear}.`);
     renderAdminWorkspace();
 };
 
@@ -1961,7 +1997,7 @@ window.restoreArchivedSemester = async function (archiveId) {
 window.deleteArchivedSemester = async function (archiveId) {
     if (!canEditInCurrentView("pengaturan")) return;
     appData.archives = (appData.archives || []).filter((a) => a.id !== archiveId);
-    await saveToCloudDatabase("Arsip semester dihapus.");
+    await saveToCloudDatabase("Arsip semester dihapus dari brankas.");
     renderAdminWorkspace();
 };
 
@@ -2127,7 +2163,7 @@ window.handleQuickCheck = function (query) {
         </div>
         <div class="flex items-center justify-between text-xs font-bold pt-1">
             <span>Terbayar: <strong class="font-mono text-emerald-500">${formatRupiah(paidCount * stats.fee)}</strong></span>
-            <button onclick="openStudentCardModal(${target.id})" class="underline font-extrabold hover:text-neo-violet">
+            <button type="button" onclick="openStudentCardModal(${target.id})" class="underline font-extrabold hover:text-neo-violet">
                 Rincian Kartu Kas →
             </button>
         </div>
@@ -2199,7 +2235,7 @@ window.renderIuranMatrix = function () {
                     <tr class="transition">
                         <td class="py-2.5 px-2.5 border-r-2 border-neo-ink text-center font-mono font-extrabold">${String(stu.absen).padStart(2, "0")}</td>
                         <td class="py-2 px-3 border-r-2 border-neo-ink">
-                            <button onclick="openStudentCardModal(${stu.id})" class="text-left group flex items-center gap-2.5">
+                            <button type="button" onclick="openStudentCardModal(${stu.id})" class="text-left group flex items-center gap-2.5">
                                 ${renderAvatarHtml(stu.name, stu.photoUrl, "w-8 h-8", "text-[10px]")}
                                 <div>
                                     <div class="font-extrabold group-hover:underline">${stu.name}</div>
@@ -2279,8 +2315,8 @@ window.openStudentCardModal = function (studentId) {
 
     const canEdit = canEditInCurrentView("keuangan");
     const btnMarkAll = document.getElementById("btnModalMarkAllPaid");
-    if (canEdit) btnMarkAll.classList.remove("hidden");
-    else btnMarkAll.classList.add("hidden");
+    if (canEdit) btnMarkAll?.classList.remove("hidden");
+    else btnMarkAll?.classList.add("hidden");
 
     document.getElementById("cardWeekGrid").innerHTML = mondays
         .map((dateStr) => {
@@ -2745,7 +2781,7 @@ window.renderAdminWorkspace = function () {
     if (qFee) qFee.value = appData.config.weeklyFee || 5000;
     document.getElementById("admTotalMondaysBadge").textContent = `${mondays.length} Kolom Senin`;
 
-    // 1. Matriks Kontrol Pelunasan Kas Siswa (Tab 1)
+    // 1. Matriks Kontrol Pelunasan Kas Siswa
     const admHead = document.getElementById("admIuranMatrixHead");
     const admBody = document.getElementById("admIuranMatrixBody");
     const admSearch = (document.getElementById("admIuranSearchInput")?.value || "").toLowerCase();
@@ -2782,7 +2818,7 @@ window.renderAdminWorkspace = function () {
                         <tr class="transition">
                             <td class="py-2 px-2 border-r-2 border-neo-ink text-center font-mono font-bold">${stu.absen}</td>
                             <td class="py-2 px-3 border-r-2 border-neo-ink font-extrabold">
-                                <button onclick="openStudentCardModal(${stu.id})" class="hover:underline text-left">${stu.name}</button>
+                                <button type="button" onclick="openStudentCardModal(${stu.id})" class="hover:underline text-left">${stu.name}</button>
                             </td>
                             ${mondays
                                 .map((dateStr) => {
@@ -2828,8 +2864,8 @@ window.renderAdminWorkspace = function () {
                             ${tx.type === "MASUK" ? "+" : "-"}${formatRupiah(tx.amount)}
                         </td>
                         <td class="py-2 px-3 text-center space-x-1">
-                            <button onclick="editTransaction(${tx.id})" class="neo-btn bg-neo-yellow text-neo-ink px-2 py-1 text-[10px]" title="Edit"><i class="fa-solid fa-pen"></i></button>
-                            <button onclick="deleteTransaction(${tx.id})" class="neo-btn bg-rose-200 text-rose-900 px-2 py-1 text-[10px]" title="Hapus"><i class="fa-solid fa-trash"></i></button>
+                            <button type="button" onclick="editTransaction(${tx.id})" class="neo-btn bg-neo-yellow text-neo-ink px-2 py-1 text-[10px]" title="Edit"><i class="fa-solid fa-pen"></i></button>
+                            <button type="button" onclick="deleteTransaction(${tx.id})" class="neo-btn bg-rose-200 text-rose-900 px-2 py-1 text-[10px]" title="Hapus"><i class="fa-solid fa-trash"></i></button>
                         </td>
                     </tr>
                 `
@@ -2841,12 +2877,12 @@ window.renderAdminWorkspace = function () {
     // 2. Render Absensi Digital Admin
     renderAdminAttendanceSection();
 
-    // 3. Tabel Daftar Siswa di Admin
+    // 3. Tabel Daftar Siswa di Admin (Tanpa No HP)
     document.getElementById("admStuTotalBadge").textContent = `${appData.students.length} Anggota`;
     const stuBody = document.getElementById("admStudentListBody");
     if (stuBody) {
         if (appData.students.length === 0) {
-            stuBody.innerHTML = `<tr><td colspan="6" class="py-6 text-center text-xs font-bold text-muted-adaptive">Belum ada anggota terdaftar.</td></tr>`;
+            stuBody.innerHTML = `<tr><td colspan="6" class="py-6 text-center text-xs font-bold text-muted-adaptive">Belum ada anggota terdaftar. Silakan isi form di samping.</td></tr>`;
         } else {
             stuBody.innerHTML = appData.students
                 .map(
@@ -2858,7 +2894,7 @@ window.renderAdminWorkspace = function () {
                                 ${renderAvatarHtml(s.name, s.photoUrl, "w-9 h-9", "text-[10px]")}
                                 <div>
                                     <div class="font-extrabold">${s.name}</div>
-                                    ${s.phone ? `<div class="font-mono text-[10px] text-muted-adaptive">${s.phone}</div>` : ""}
+                                    ${s.quote ? `<div class="text-[10px] text-muted-adaptive italic truncate max-w-[160px]">"${s.quote}"</div>` : ""}
                                 </div>
                             </div>
                         </td>
@@ -2866,8 +2902,8 @@ window.renderAdminWorkspace = function () {
                         <td class="py-2 px-3 border-r-2 border-neo-ink text-xs">${s.role}</td>
                         <td class="py-2 px-2.5 border-r-2 border-neo-ink text-xs">${s.piket}</td>
                         <td class="py-2 px-3 text-center space-x-1">
-                            <button onclick="editStudentInAdmin(${s.id})" class="neo-btn bg-neo-yellow text-neo-ink px-2 py-1 text-[10px]"><i class="fa-solid fa-pen"></i></button>
-                            <button onclick="deleteStudentInAdmin(${s.id})" class="neo-btn bg-rose-200 text-rose-900 px-2 py-1 text-[10px]"><i class="fa-solid fa-trash"></i></button>
+                            <button type="button" onclick="editStudentInAdmin(${s.id})" class="neo-btn bg-neo-yellow text-neo-ink px-2 py-1 text-[10px]"><i class="fa-solid fa-pen"></i></button>
+                            <button type="button" onclick="deleteStudentInAdmin(${s.id})" class="neo-btn bg-rose-200 text-rose-900 px-2 py-1 text-[10px]"><i class="fa-solid fa-trash"></i></button>
                         </td>
                     </tr>
                 `
@@ -2892,8 +2928,8 @@ window.renderAdminWorkspace = function () {
                             <p class="text-xs text-muted-adaptive line-clamp-1">${a.body}</p>
                         </div>
                         <div class="flex items-center gap-1.5 shrink-0">
-                            <button onclick="editAnnouncement(${a.id})" class="neo-btn bg-neo-yellow text-neo-ink px-2.5 py-1.5 text-xs"><i class="fa-solid fa-pen"></i></button>
-                            <button onclick="deleteAnnouncement(${a.id})" class="neo-btn bg-rose-200 text-rose-900 px-2.5 py-1.5 text-xs"><i class="fa-solid fa-trash"></i></button>
+                            <button type="button" onclick="editAnnouncement(${a.id})" class="neo-btn bg-neo-yellow text-neo-ink px-2.5 py-1.5 text-xs"><i class="fa-solid fa-pen"></i></button>
+                            <button type="button" onclick="deleteAnnouncement(${a.id})" class="neo-btn bg-rose-200 text-rose-900 px-2.5 py-1.5 text-xs"><i class="fa-solid fa-trash"></i></button>
                         </div>
                     </div>
                 `
@@ -2918,7 +2954,7 @@ window.renderAdminWorkspace = function () {
                             <span class="font-mono text-[10px] font-extrabold bg-white/85 text-neo-ink px-1.5 py-0.5 rounded border border-neo-ink">${n.author} • ${n.date || ""}</span>
                             <p class="font-bold mt-1 break-words">"${n.message}"</p>
                         </div>
-                        <button onclick="deleteStickyNote(${n.id})" class="neo-btn bg-white text-rose-700 px-2 py-1 text-[10px] shrink-0" title="Hapus Tempelan">
+                        <button type="button" onclick="deleteStickyNote(${n.id})" class="neo-btn bg-white text-rose-700 px-2 py-1 text-[10px] shrink-0" title="Hapus Tempelan">
                             <i class="fa-solid fa-trash"></i>
                         </button>
                     </div>
@@ -2954,8 +2990,8 @@ window.renderAdminWorkspace = function () {
                                         <span class="text-[10px] text-muted-adaptive">${item.teacher}</span>
                                     </div>
                                     <div class="flex items-center gap-1 shrink-0">
-                                        <button onclick="editScheduleItem('${d}', ${idx})" class="neo-btn bg-neo-yellow text-neo-ink px-2 py-1 text-[10px]"><i class="fa-solid fa-pen"></i></button>
-                                        <button onclick="deleteScheduleItem('${d}', ${idx})" class="neo-btn bg-rose-200 text-rose-900 px-2 py-1 text-[10px]"><i class="fa-solid fa-trash"></i></button>
+                                        <button type="button" onclick="editScheduleItem('${d}', ${idx})" class="neo-btn bg-neo-yellow text-neo-ink px-2 py-1 text-[10px]"><i class="fa-solid fa-pen"></i></button>
+                                        <button type="button" onclick="deleteScheduleItem('${d}', ${idx})" class="neo-btn bg-rose-200 text-rose-900 px-2 py-1 text-[10px]"><i class="fa-solid fa-trash"></i></button>
                                     </div>
                                 </div>
                             `
@@ -2986,8 +3022,8 @@ window.renderAdminWorkspace = function () {
                             <p class="text-[10px] text-muted-adaptive truncate">${alb.caption || ""}</p>
                         </div>
                         <div class="flex items-center gap-1 shrink-0">
-                            <button onclick="editAlbumItem(${alb.id})" class="neo-btn bg-neo-yellow text-neo-ink px-2 py-1.5 text-xs"><i class="fa-solid fa-pen"></i></button>
-                            <button onclick="deleteAlbumItem(${alb.id})" class="neo-btn bg-rose-200 text-rose-900 px-2 py-1.5 text-xs"><i class="fa-solid fa-trash"></i></button>
+                            <button type="button" onclick="editAlbumItem(${alb.id})" class="neo-btn bg-neo-yellow text-neo-ink px-2 py-1.5 text-xs"><i class="fa-solid fa-pen"></i></button>
+                            <button type="button" onclick="deleteAlbumItem(${alb.id})" class="neo-btn bg-rose-200 text-rose-900 px-2 py-1.5 text-xs"><i class="fa-solid fa-trash"></i></button>
                         </div>
                     </div>
                 `
@@ -2996,12 +3032,12 @@ window.renderAdminWorkspace = function () {
         }
     }
 
-    // 7. Daftar Akun Pengurus (Dengan Tombol Edit & Ganti Sandi)
+    // 7. Daftar Akun Pengurus & Ganti Sandi
     const accBox = document.getElementById("admAccountsList");
     if (accBox) {
         const allAdmins = getAllCombinedAdmins();
         if (allAdmins.length === 0) {
-            accBox.innerHTML = `<div class="py-6 text-center text-xs font-bold text-muted-adaptive">Belum ada akun pengurus tambahan.</div>`;
+            accBox.innerHTML = `<div class="py-6 text-center text-xs font-bold text-muted-adaptive">Belum ada akun pengurus.</div>`;
         } else {
             accBox.innerHTML = allAdmins
                 .map(
@@ -3018,9 +3054,10 @@ window.renderAdminWorkspace = function () {
                                         : ""
                                 }
                             </div>
-                            <div class="text-[11px] font-mono text-muted-adaptive mt-1">
-                                Sandi: <span class="bg-neo-surface px-1.5 py-0.5 rounded border border-neo-ink font-bold text-neo-ink">${acc.password ? "••••••" : "(Kosong)"}</span> •
-                                Akses: ${acc.isSuperAdmin ? "PENUH (Super Admin)" : (acc.permissions || []).join(", ")}
+                            <div class="text-[11px] font-mono text-muted-adaptive mt-1.5 flex flex-wrap items-center gap-2">
+                                <span>Sandi Login: <strong class="bg-neo-surface px-1.5 py-0.5 rounded border border-neo-ink text-neo-ink">${acc.password || "(Kosong)"}</strong></span>
+                                <span>•</span>
+                                <span>Akses: ${acc.isSuperAdmin ? "PENUH (Super Admin)" : (acc.permissions || []).join(", ")}</span>
                             </div>
                         </div>
                         <div class="flex items-center gap-1.5 shrink-0">
@@ -3048,6 +3085,8 @@ window.renderAdminWorkspace = function () {
     document.getElementById("cfgClassCode").value = appData.config.classCode || "MDV";
     document.getElementById("cfgClassName").value = appData.config.className || "MEDIVANCE";
     document.getElementById("cfgClassMotto").value = appData.config.classMotto || "Together We Grow, Together We Heal";
+    const semSel = document.getElementById("cfgSemesterName");
+    if (semSel) semSel.value = appData.config.semesterName || "Semester Ganjil";
     document.getElementById("cfgClassLogoUrl").value = appData.config.classLogoUrl || "";
     document.getElementById("cfgHeroBgUrl").value = appData.config.heroBgUrl || DEFAULT_HERO_BG;
     document.getElementById("cfgWelcomeTypingText").value = appData.config.welcomeTypingText || "SELAMAT DATANG DI MEDIVANCE";
@@ -3071,7 +3110,7 @@ window.renderAdminWorkspace = function () {
 };
 
 // ============================================================================
-// HANDLER CRUD TIAP TAB ADMIN (LANGSUNG TERSIMPAN KE FIREBASE)
+// HANDLER CRUD TIAP TAB ADMIN (LANGSUNG TERSIMPAN REAL-TIME KE FIREBASE)
 // ============================================================================
 
 window.handleQuickMondayRangeUpdate = async function (e) {
@@ -3153,6 +3192,7 @@ window.deleteTransaction = async function (txId) {
     renderAdminWorkspace();
 };
 
+// --- CRUD Anggota Kelas (Bebas Bug: Tanpa Kolom No HP & Tanpa Status Awal Kas) ---
 window.handleStudentPhotoUpload = function (e) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -3170,7 +3210,8 @@ window.updateStudentPhotoPreview = function (url) {
 };
 
 window.clearStudentPhotoInput = function () {
-    document.getElementById("admStuPhotoUrl").value = "";
+    const urlInput = document.getElementById("admStuPhotoUrl");
+    if (urlInput) urlInput.value = "";
     const fileEl = document.getElementById("admStuPhotoFile");
     if (fileEl) fileEl.value = "";
     updateStudentPhotoPreview("");
@@ -3180,17 +3221,19 @@ window.handleAdminSaveStudent = async function (e) {
     e.preventDefault();
     if (!canEditInCurrentView("siswa")) return;
 
-    const editId = document.getElementById("admStuEditId").value;
-    const absen = Number(document.getElementById("admStuAbsen").value);
-    const name = document.getElementById("admStuName").value.trim();
-    const gender = document.getElementById("admStuGender").value;
-    const phone = document.getElementById("admStuPhone").value.trim();
-    const role = document.getElementById("admStuRole").value;
-    const piket = document.getElementById("admStuPiket").value;
-    const initKas = document.getElementById("admStuInitKas").value;
-    const quote = document.getElementById("admStuQuote").value.trim();
-    const photoUrl = (document.getElementById("admStuPhotoUrl").value || "").trim();
-    const mondays = getMondayDatesList();
+    const editId = document.getElementById("admStuEditId")?.value || "";
+    const absen = Number(document.getElementById("admStuAbsen")?.value || 1);
+    const name = (document.getElementById("admStuName")?.value || "").trim();
+    const gender = document.getElementById("admStuGender")?.value || "L";
+    const role = document.getElementById("admStuRole")?.value || "Anggota Kelas";
+    const piket = document.getElementById("admStuPiket")?.value || "Senin";
+    const quote = (document.getElementById("admStuQuote")?.value || "").trim();
+    const photoUrl = (document.getElementById("admStuPhotoUrl")?.value || "").trim();
+
+    if (!name) {
+        showToast("Nama lengkap anggota wajib diisi!", "bg-neo-coral");
+        return;
+    }
 
     if (editId) {
         const target = appData.students.find((s) => String(s.id) === String(editId));
@@ -3198,44 +3241,31 @@ window.handleAdminSaveStudent = async function (e) {
             target.absen = absen;
             target.name = name;
             target.gender = gender;
-            target.phone = phone;
             target.role = role;
             target.piket = piket;
             target.quote = quote;
             target.photoUrl = photoUrl;
-            if (!target.paidDates) target.paidDates = {};
-            if (initKas === "ALL_PAID") {
-                mondays.forEach((d) => {
-                    target.paidDates[d] = true;
-                });
-            } else if (initKas === "ALL_UNPAID") {
+            if (!target.paidDates || typeof target.paidDates !== "object") {
                 target.paidDates = {};
             }
         }
     } else {
-        const paidDates = {};
-        if (initKas === "ALL_PAID") {
-            mondays.forEach((d) => {
-                paidDates[d] = true;
-            });
-        }
         appData.students.push({
             id: Date.now(),
             absen,
             name,
             gender,
-            phone,
             role,
             piket,
             quote,
             photoUrl,
-            paidDates
+            paidDates: {}
         });
     }
 
-    appData.students.sort((a, b) => a.absen - b.absen);
+    appData.students.sort((a, b) => Number(a.absen) - Number(b.absen));
     resetStudentForm();
-    await saveToCloudDatabase(`Data & foto profil ${name} berhasil disimpan ke Firebase!`);
+    await saveToCloudDatabase(`Data anggota "${name}" berhasil disimpan ke Firebase!`);
     renderAdminWorkspace();
 };
 
@@ -3246,27 +3276,28 @@ window.editStudentInAdmin = function (id) {
     document.getElementById("admStuAbsen").value = s.absen;
     document.getElementById("admStuName").value = s.name;
     document.getElementById("admStuGender").value = s.gender || "L";
-    document.getElementById("admStuPhone").value = s.phone || "";
-    document.getElementById("admStuRole").value = s.role;
-    document.getElementById("admStuPiket").value = s.piket;
-    document.getElementById("admStuInitKas").value = "KEEP";
+    document.getElementById("admStuRole").value = s.role || "Anggota Kelas";
+    document.getElementById("admStuPiket").value = s.piket || "Senin";
     document.getElementById("admStuQuote").value = s.quote || "";
     document.getElementById("admStuPhotoUrl").value = s.photoUrl || "";
     updateStudentPhotoPreview(s.photoUrl || "");
     document.getElementById("admStudentFormTitle").textContent = `Edit Anggota #${s.absen}`;
-    document.getElementById("btnCancelEditStudent").classList.remove("hidden");
+    document.getElementById("btnCancelEditStudent")?.classList.remove("hidden");
 };
 
 window.resetStudentForm = function () {
-    document.getElementById("admStuEditId").value = "";
-    document.getElementById("admStuAbsen").value = "";
-    document.getElementById("admStuName").value = "";
-    document.getElementById("admStuPhone").value = "";
-    document.getElementById("admStuInitKas").value = "KEEP";
-    document.getElementById("admStuQuote").value = "";
+    const editEl = document.getElementById("admStuEditId");
+    if (editEl) editEl.value = "";
+    const absEl = document.getElementById("admStuAbsen");
+    if (absEl) absEl.value = "";
+    const nameEl = document.getElementById("admStuName");
+    if (nameEl) nameEl.value = "";
+    const quoteEl = document.getElementById("admStuQuote");
+    if (quoteEl) quoteEl.value = "";
     clearStudentPhotoInput();
-    document.getElementById("admStudentFormTitle").textContent = "Form Anggota & Perangkat Kelas";
-    document.getElementById("btnCancelEditStudent").classList.add("hidden");
+    const titleEl = document.getElementById("admStudentFormTitle");
+    if (titleEl) titleEl.textContent = "Form Anggota & Perangkat Kelas";
+    document.getElementById("btnCancelEditStudent")?.classList.add("hidden");
 };
 
 window.deleteStudentInAdmin = async function (id) {
@@ -3276,6 +3307,7 @@ window.deleteStudentInAdmin = async function (id) {
     renderAdminWorkspace();
 };
 
+// --- CRUD Pengumuman & Tugas ---
 window.handleAdminSaveInfo = async function (e) {
     e.preventDefault();
     if (!canEditInCurrentView("info")) return;
@@ -3330,6 +3362,7 @@ window.deleteAnnouncement = async function (id) {
     renderAdminWorkspace();
 };
 
+// --- CRUD Jadwal Pelajaran + Pemilih Jam ---
 window.syncScheduleTimeRange = function () {
     const start = document.getElementById("admSchStartTime")?.value || "07:30";
     const end = document.getElementById("admSchEndTime")?.value || "09:00";
@@ -3426,6 +3459,7 @@ window.deleteScheduleItem = async function (day, index) {
     }
 };
 
+// --- CRUD Album Kenangan ---
 window.handleAlbumImageUpload = function (e) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -3567,19 +3601,20 @@ window.handleAdminSaveAccount = async function (e) {
     if (!canEditInCurrentView("akun")) return;
 
     const origUser = (document.getElementById("admAccEditOriginalUser")?.value || "").trim().toLowerCase();
-    const username = document.getElementById("admAccUsername").value.trim().toLowerCase();
-    const password = document.getElementById("admAccPassword").value;
-    const name = document.getElementById("admAccName").value.trim();
-    const role = document.getElementById("admAccRole").value.trim();
+    const username = (document.getElementById("admAccUsername")?.value || "").trim().toLowerCase();
+    const password = document.getElementById("admAccPassword")?.value || "";
+    const name = (document.getElementById("admAccName")?.value || "").trim();
+    const role = (document.getElementById("admAccRole")?.value || "").trim();
+
+    if (!username || !password) {
+        showToast("Username dan Password wajib diisi!", "bg-neo-coral");
+        return;
+    }
 
     const checkedPerms = Array.from(document.querySelectorAll('input[name="admPerm"]:checked')).map((cb) => cb.value);
     if (checkedPerms.length === 0) {
         showToast("Pilih minimal 1 modul hak akses!", "bg-neo-coral");
         return;
-    }
-
-    if (checkedPerms.includes("siswa") && !checkedPerms.includes("absensi")) {
-        checkedPerms.push("absensi");
     }
 
     const isSuper = checkedPerms.includes("akun");
@@ -3617,7 +3652,7 @@ window.handleAdminSaveAccount = async function (e) {
 
     await saveAdminAccountToCloud(accountObj);
     resetAdminAccountForm();
-    await saveToCloudDatabase(`Akun & sandi pengurus "${username}" berhasil disimpan ke Firebase!`);
+    await saveToCloudDatabase(`Akun pengurus "${username}" berhasil disimpan & siap digunakan login!`);
     renderAdminWorkspace();
 };
 
@@ -3651,6 +3686,8 @@ window.handleAdminSaveConfig = async function (e) {
     appData.config.classCode = document.getElementById("cfgClassCode").value.trim() || "MDV";
     appData.config.className = document.getElementById("cfgClassName").value.trim() || "MEDIVANCE";
     appData.config.classMotto = document.getElementById("cfgClassMotto").value.trim() || "Together We Grow, Together We Heal";
+    const semSel = document.getElementById("cfgSemesterName");
+    if (semSel) appData.config.semesterName = semSel.value;
     appData.config.classLogoUrl = document.getElementById("cfgClassLogoUrl").value.trim();
     appData.config.heroBgUrl = document.getElementById("cfgHeroBgUrl").value.trim() || DEFAULT_HERO_BG;
     appData.config.welcomeTypingText = document.getElementById("cfgWelcomeTypingText").value.trim();
@@ -3667,7 +3704,7 @@ window.handleAdminSaveConfig = async function (e) {
     appData.config.marqueeText = document.getElementById("cfgMarqueeText").value.trim();
 
     currentTypedGoal = "";
-    await saveToCloudDatabase("Identitas Kelas, Logo, Foto Latar & Wali Kelas berhasil disimpan ke Firebase!");
+    await saveToCloudDatabase("Pengaturan Identitas, Logo, Latar & Wali Kelas berhasil disimpan ke Firebase!");
     renderAdminWorkspace();
 };
 
@@ -3920,24 +3957,24 @@ window.exportMutasiCSV = function () {
 };
 
 // ============================================================================
-// RENDER KESELURUHAN & INISIALISASI APLIKASI
+// RENDER KESELURUHAN & INISIALISASI APLIKASI (ANTI-CRASH & AUTO-DASHBOARD)
 // ============================================================================
 
 function renderAllViews() {
-    renderHeaderAndHeroIdentity();
-    renderDashboard();
-    renderIuranMatrix();
-    renderLedgerTable();
-    renderPublicAttendanceView();
-    renderStickyNotesWall();
-    renderInfoBoard();
-    renderScheduleAndPiket();
-    renderAlbumGallery();
-    renderStudentDirectory();
+    try { renderHeaderAndHeroIdentity(); } catch (e) { console.error(e); }
+    try { renderDashboard(); } catch (e) { console.error(e); }
+    try { renderIuranMatrix(); } catch (e) { console.error(e); }
+    try { renderLedgerTable(); } catch (e) { console.error(e); }
+    try { renderPublicAttendanceView(); } catch (e) { console.error(e); }
+    try { renderStickyNotesWall(); } catch (e) { console.error(e); }
+    try { renderInfoBoard(); } catch (e) { console.error(e); }
+    try { renderScheduleAndPiket(); } catch (e) { console.error(e); }
+    try { renderAlbumGallery(); } catch (e) { console.error(e); }
+    try { renderStudentDirectory(); } catch (e) { console.error(e); }
+
     if (activeWorkspace === "admin" && currentAdmin) {
-        renderAdminWorkspace();
+        try { renderAdminWorkspace(); } catch (e) { console.error(e); }
     }
-    setTimeout(initScrollRevealObserver, 50);
 }
 
 function updateClock() {
@@ -3956,33 +3993,33 @@ function updateClock() {
 }
 
 window.addEventListener("DOMContentLoaded", () => {
-    // 1. Bersihkan sisa cache data localStorage lama agar 100% menggunakan Cloud Firebase
-    try {
-        localStorage.removeItem("medivance_portal_state_v3");
-    } catch (e) {}
-
-    // 2. Suntikkan pembaruan UI (Absensi Digital, Drawer Titik Tiga Admin, Ganti Sandi & Semester Baru)
-    upgradeDOMStructure();
-
-    // 3. Terapkan preferensi tema Gelap/Terang
+    // 1. Terapkan preferensi tema Gelap/Terang
     try {
         const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
         if (savedTheme === "1") applyThemeState(true);
     } catch (e) {}
 
-    // 4. Set tanggal lokal hari ini pada seluruh input tanggal
+    // 2. Set tanggal & bulan lokal hari ini pada seluruh input tanggal
     const todayIso = toLocalISODate(new Date());
-    ["admTxDate", "admAlbumDate", "admAttendanceDateInput", "publicAttendanceDateInput"].forEach((id) => {
+    const monthIso = toLocalISOMonth(new Date());
+    ["admTxDate", "admAlbumDate", "admAttendanceDateInput", "admAttendanceWeekInput", "publicAttendanceDateInput", "publicAttendanceWeekInput"].forEach((id) => {
         const el = document.getElementById(id);
         if (el) el.value = todayIso;
     });
+    ["admAttendanceMonthInput", "publicAttendanceMonthInput"].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.value = monthIso;
+    });
 
+    // 3. Pastikan Beranda Utama (`#view-dashboard`) langsung tampil penuh saat awal buka web
+    activeWorkspace = "user";
+    activeTabId = "dashboard";
     syncScheduleTimeRange();
     updateClock();
     setInterval(updateClock, 30000);
     updateWorkspaceVisibility();
 
-    // 5. Hubungkan secara real-time ke Cloud Firebase (Firestore Multi-Chunk + RTDB)
+    // 4. Hubungkan secara real-time ke Cloud Firebase (Membaca data lama terlebih dahulu tanpa menimpanya)
     initCloudSynchronization({
         onStateReceived: (incomingState, updatedAt) => {
             if (updatedAt && updatedAt === lastAppliedTimestamp) return;
