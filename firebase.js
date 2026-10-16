@@ -1,5 +1,5 @@
 // ============================================================================
-// FIREBASE.JS — FAST PARALLEL ANONYMOUS SYNC & MULTI-LAYER ADMIN AUTH
+// FIREBASE.JS — MESIN CLOUD REAL-TIME & OTENTIKASI GANDA ADMIN (MEDIVANCE)
 // ============================================================================
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
@@ -69,14 +69,37 @@ const RTDB_ADMINS_PATH = `portal_kelas/${APP_ID_SLUG}/admins`;
 
 const CHUNK_SIZE_LIMIT = 650000;
 
+// Akun Cadangan Utama (Selalu dijamin ada jika belum diubah di Cloud)
+const FALLBACK_SUPER_ADMIN = {
+    id: 1,
+    username: "admin@kelas.id",
+    email: "admin@kelas.id",
+    password: "admin123",
+    name: "Admin Utama Medivance",
+    role: "Super Admin",
+    isSuperAdmin: true,
+    permissions: [
+        "beranda",
+        "keuangan",
+        "atur_periode_kas",
+        "absensi",
+        "siswa",
+        "info",
+        "jadwal",
+        "album",
+        "akun",
+        "pengaturan"
+    ]
+};
+
 let lastDeliveredRevision = "";
 let hasLoadedNonEmptyData = false;
 let anonymousAuthPromise = null;
+let cachedCloudAdmins = [FALLBACK_SUPER_ADMIN];
 
 /**
  * SINGLETON ANONYMOUS AUTH:
- * Berjalan otomatis di latar belakang untuk mempercepat baca/tulis data publik
- * tanpa memutus sesi jika pengurus sudah login dengan Email/Password.
+ * Memastikan sesi koneksi baca/tulis cepat selalu aktif di latar belakang.
  */
 export function ensureAuthReady() {
     if (auth.currentUser) return Promise.resolve(auth.currentUser);
@@ -101,71 +124,25 @@ export function ensureAuthReady() {
     return anonymousAuthPromise;
 }
 
-// Picu koneksi sesi anonim sejak detik pertama file dimuat
+// Aktifkan sesi anonim otomatis saat file dimuat
 ensureAuthReady();
 
-export function calculateDataRichness(stateObj) {
-    if (!stateObj || typeof stateObj !== "object") return 0;
-    const stuCount = Array.isArray(stateObj.students) ? stateObj.students.length : 0;
-    const txCount = Array.isArray(stateObj.transactions) ? stateObj.transactions.length : 0;
-    const annCount = Array.isArray(stateObj.announcements) ? stateObj.announcements.length : 0;
-    const albCount = Array.isArray(stateObj.albums) ? stateObj.albums.length : 0;
-    const noteCount = Array.isArray(stateObj.stickyNotes) ? stateObj.stickyNotes.length : 0;
-    const arcCount = Array.isArray(stateObj.archives) ? stateObj.archives.length : 0;
-    const attCount = stateObj.attendance && typeof stateObj.attendance === "object"
-        ? Object.keys(stateObj.attendance).length
-        : 0;
-    const holCount = Array.isArray(stateObj.config?.holidays) ? stateObj.config.holidays.length : 0;
-
-    return (
-        stuCount * 10 +
-        txCount * 5 +
-        annCount * 5 +
-        albCount * 5 +
-        noteCount * 2 +
-        arcCount * 15 +
-        attCount * 3 +
-        holCount * 2
-    );
-}
-
-function deliverRealtimeState(onStateReceived, stateObj, updatedAt, source) {
-    if (!stateObj || typeof stateObj !== "object") return;
-
-    const incomingRichness = calculateDataRichness(stateObj);
-    const revKey = `${updatedAt || "no-ts"}_${incomingRichness}`;
-
-    if (hasLoadedNonEmptyData && incomingRichness === 0 && !updatedAt) {
-        return;
-    }
-
-    if (incomingRichness > 0) {
-        hasLoadedNonEmptyData = true;
-    }
-
-    if (updatedAt && revKey === lastDeliveredRevision) {
-        return;
-    }
-
-    lastDeliveredRevision = revKey;
-    onStateReceived(stateObj, updatedAt || new Date().toISOString(), source);
-}
-
 /**
- * Normalisasi objek akun pengurus dari database
+ * Normalisasi data akun pengurus dari berbagai format dokumen Firebase
  */
 export function parseAdminRecord(id, data) {
     if (!data || typeof data !== "object") return null;
-    const rawUser = String(data.username || data.email || id || "").trim().toLowerCase();
+    const rawUser = String(data.username || data.email || data.user || id || "").trim().toLowerCase();
     if (!rawUser) return null;
 
     const emailVal = rawUser.includes("@") ? rawUser : `${rawUser}@kelas.id`;
-    const passVal = String(data.password ?? data.pin ?? data.pass ?? "").trim();
+    const passVal = String(data.password ?? data.pass ?? data.pin ?? data.sandi ?? "");
+    if (!passVal) return null;
+
     const isSuper = Boolean(
         data.isSuperAdmin ??
-        (Array.isArray(data.permissions) && data.permissions.includes("akun")) ??
-        rawUser === "admin@kelas.id" ??
-        rawUser === "admin"
+        (rawUser === "admin" || rawUser === "admin@kelas.id") ??
+        (Array.isArray(data.permissions) && data.permissions.includes("akun"))
     );
 
     const defaultSuperPerms = [
@@ -181,7 +158,7 @@ export function parseAdminRecord(id, data) {
         "pengaturan"
     ];
 
-    let perms = Array.isArray(data.permissions) ? [...data.permissions] : (isSuper ? defaultSuperPerms : ["beranda"]);
+    let perms = Array.isArray(data.permissions) ? [...data.permissions] : (isSuper ? defaultSuperPerms : ["beranda", "keuangan"]);
     if (!perms.includes("beranda")) perms.unshift("beranda");
     if (isSuper) perms = defaultSuperPerms;
 
@@ -195,6 +172,82 @@ export function parseAdminRecord(id, data) {
         isSuperAdmin: isSuper,
         permissions: perms
     };
+}
+
+/**
+ * Menggabungkan daftar admin dan memastikan akun Super Admin tidak pernah hilang
+ */
+function ensureDefaultAdminPresent(adminList = []) {
+    const map = new Map();
+    map.set("admin@kelas.id", { ...FALLBACK_SUPER_ADMIN });
+
+    [...cachedCloudAdmins, ...(Array.isArray(adminList) ? adminList : [])].forEach((item) => {
+        const parsed = parseAdminRecord(item?.username || item?.id, item);
+        if (parsed) {
+            const key = parsed.username.toLowerCase();
+            map.set(key, parsed);
+            // Jika username adalah 'admin', sinkronkan juga ke key 'admin@kelas.id'
+            if (key === "admin") {
+                map.set("admin@kelas.id", { ...parsed, username: "admin@kelas.id", email: "admin@kelas.id" });
+            }
+        }
+    });
+
+    const merged = Array.from(map.values());
+    cachedCloudAdmins = merged;
+    return merged;
+}
+
+export function calculateDataRichness(stateObj) {
+    if (!stateObj || typeof stateObj !== "object") return 0;
+    const stuCount = Array.isArray(stateObj.students) ? stateObj.students.length : 0;
+    const txCount = Array.isArray(stateObj.transactions) ? stateObj.transactions.length : 0;
+    const annCount = Array.isArray(stateObj.announcements) ? stateObj.announcements.length : 0;
+    const albCount = Array.isArray(stateObj.albums) ? stateObj.albums.length : 0;
+    const noteCount = Array.isArray(stateObj.stickyNotes) ? stateObj.stickyNotes.length : 0;
+    const arcCount = Array.isArray(stateObj.archives) ? stateObj.archives.length : 0;
+    const attCount = stateObj.attendance && typeof stateObj.attendance === "object"
+        ? Object.keys(stateObj.attendance).length
+        : 0;
+    const holCount = Array.isArray(stateObj.config?.holidays) ? stateObj.config.holidays.length : 0;
+    const admCount = Array.isArray(stateObj.admins) ? stateObj.admins.length : 0;
+
+    return (
+        stuCount * 10 +
+        txCount * 5 +
+        annCount * 5 +
+        albCount * 5 +
+        noteCount * 2 +
+        arcCount * 15 +
+        attCount * 3 +
+        holCount * 2 +
+        admCount * 2
+    );
+}
+
+function deliverRealtimeState(onStateReceived, stateObj, updatedAt, source) {
+    if (!stateObj || typeof stateObj !== "object") return;
+
+    // Pastikan daftar akun admin di dalam state selalu terisi dan tidak pernah kosong
+    stateObj.admins = ensureDefaultAdminPresent(stateObj.admins);
+
+    const incomingRichness = calculateDataRichness(stateObj);
+    const revKey = `${updatedAt || "no-ts"}_${incomingRichness}`;
+
+    if (hasLoadedNonEmptyData && incomingRichness <= 2 && !updatedAt) {
+        return;
+    }
+
+    if (incomingRichness > 2) {
+        hasLoadedNonEmptyData = true;
+    }
+
+    if (updatedAt && revKey === lastDeliveredRevision) {
+        return;
+    }
+
+    lastDeliveredRevision = revKey;
+    onStateReceived(stateObj, updatedAt || new Date().toISOString(), source);
 }
 
 async function assembleChunksFromPath(colPathArray, totalChunks) {
@@ -232,7 +285,7 @@ async function parseFirestoreSnapshot(snapshot, chunkColPath) {
 }
 
 /**
- * Mengambil state terbaru secara paralel dari RTDB & Firestore
+ * PENGAMBILAN DATA AWAL SECARA PARALEL
  */
 export async function fetchInitialPortalStateFromCloud() {
     ensureAuthReady();
@@ -286,8 +339,8 @@ export async function fetchInitialPortalStateFromCloud() {
     if (candidates.length === 0) return null;
 
     candidates.sort((a, b) => {
-        if (b.richness > 0 && a.richness === 0) return 1;
-        if (a.richness > 0 && b.richness === 0) return -1;
+        if (b.richness > 2 && a.richness <= 2) return 1;
+        if (a.richness > 2 && b.richness <= 2) return -1;
         const timeCmp = String(b.updatedAt).localeCompare(String(a.updatedAt));
         if (timeCmp !== 0) return timeCmp;
         return b.richness - a.richness;
@@ -297,20 +350,31 @@ export async function fetchInitialPortalStateFromCloud() {
 }
 
 /**
- * Mengambil seluruh daftar akun pengurus dari semua koleksi Cloud + main_state
+ * PENGAMBILAN & VERIFIKASI AKUN ADMIN LENGKAP:
+ * 1. Memeriksa Realtime Database (`admins` & `main_state.admins`)
+ * 2. Memeriksa Firestore (`artifacts/.../admins`, `admins`, `admin`, `users`)
+ * 3. Memverifikasi langsung ke Firebase Authentication (`signInWithEmailAndPassword`)
+ *    jika pengguna sedang menekan tombol Login di layar!
  */
 export async function fetchAllAdminsFromCloud() {
-    ensureAuthReady();
-    const collected = [];
+    await ensureAuthReady();
+    const collected = [...cachedCloudAdmins];
 
-    const [rtSnap, artSnap, rootAdminsSnap, rootAdminSnap, mainRtSnap] = await Promise.allSettled([
+    // Cek apakah form login sedang diisi oleh pengguna
+    const loginUserEl = typeof document !== "undefined" ? document.getElementById("loginUsername") : null;
+    const loginPassEl = typeof document !== "undefined" ? document.getElementById("loginPassword") : null;
+    const activeInputUser = (loginUserEl?.value || "").trim().toLowerCase();
+    const activeInputPass = loginPassEl?.value || "";
+
+    const [rtSnap, rtMainSnap, artSnap, rootAdminsSnap, rootAdminSnap] = await Promise.allSettled([
         dbGet(dbRef(rtdb, RTDB_ADMINS_PATH)),
+        dbGet(dbRef(rtdb, RTDB_MAIN_PATH)),
         getDocs(collection(db, ...FS_ART_ADMINS_COL)),
         getDocs(collection(db, "admins")),
-        getDocs(collection(db, "admin")),
-        dbGet(dbRef(rtdb, RTDB_MAIN_PATH))
+        getDocs(collection(db, "admin"))
     ]);
 
+    // 1. Dari RTDB Admins Collection
     if (rtSnap.status === "fulfilled" && rtSnap.value.exists()) {
         const rawObj = rtSnap.value.val() || {};
         Object.keys(rawObj).forEach((k) => {
@@ -319,6 +383,21 @@ export async function fetchAllAdminsFromCloud() {
         });
     }
 
+    // 2. Dari RTDB Main State Payload
+    if (rtMainSnap.status === "fulfilled" && rtMainSnap.value.exists()) {
+        try {
+            const val = rtMainSnap.value.val();
+            const parsedState = typeof val.payload === "string" ? JSON.parse(val.payload) : val.payload;
+            if (Array.isArray(parsedState?.admins)) {
+                parsedState.admins.forEach((a) => {
+                    const parsed = parseAdminRecord(a.username || a.id, a);
+                    if (parsed) collected.push(parsed);
+                });
+            }
+        } catch (e) {}
+    }
+
+    // 3. Dari Firestore Artifacts Admins
     if (artSnap.status === "fulfilled") {
         artSnap.value.forEach((d) => {
             const parsed = parseAdminRecord(d.id, d.data());
@@ -326,13 +405,13 @@ export async function fetchAllAdminsFromCloud() {
         });
     }
 
+    // 4. Dari Firestore Root `admins` & `admin`
     if (rootAdminsSnap.status === "fulfilled") {
         rootAdminsSnap.value.forEach((d) => {
             const parsed = parseAdminRecord(d.id, d.data());
             if (parsed) collected.push(parsed);
         });
     }
-
     if (rootAdminSnap.status === "fulfilled") {
         rootAdminSnap.value.forEach((d) => {
             const parsed = parseAdminRecord(d.id, d.data());
@@ -340,30 +419,66 @@ export async function fetchAllAdminsFromCloud() {
         });
     }
 
-    // Periksa juga daftar admins yang tersimpan di dalam payload main_state RTDB
-    if (mainRtSnap.status === "fulfilled" && mainRtSnap.value.exists()) {
-        try {
-            const val = mainRtSnap.value.val();
-            const parsedState = typeof val.payload === "string" ? JSON.parse(val.payload) : val.payload;
-            if (Array.isArray(parsedState?.admins)) {
-                parsedState.admins.forEach((adm) => {
-                    const parsed = parseAdminRecord(adm.username || adm.id, adm);
-                    if (parsed) collected.push(parsed);
-                });
+    // 5. Jembatan Otomatis Firebase Authentication (Email & Password):
+    //    Jika pengguna sedang mencoba login dengan akun yang terdaftar di Firebase Console Auth
+    //    (misal: admin@kelas.id), verifikasi langsung ke Firebase Auth!
+    if (activeInputUser && activeInputPass) {
+        const emailCandidate = activeInputUser.includes("@") ? activeInputUser : `${activeInputUser}@kelas.id`;
+        const unameOnly = activeInputUser.split("@")[0];
+
+        const alreadyMatched = collected.some((a) => {
+            const u = String(a.username || "").toLowerCase();
+            const em = String(a.email || "").toLowerCase();
+            return (u === activeInputUser || em === activeInputUser || u === emailCandidate || u.split("@")[0] === unameOnly) &&
+                   String(a.password) === String(activeInputPass);
+        });
+
+        if (!alreadyMatched) {
+            try {
+                const cred = await signInWithEmailAndPassword(auth, emailCandidate, activeInputPass);
+                if (cred && cred.user) {
+                    const verifiedEmail = (cred.user.email || emailCandidate).toLowerCase();
+                    const existingMeta = collected.find(
+                        (a) => String(a.username).toLowerCase() === verifiedEmail || String(a.email).toLowerCase() === verifiedEmail
+                    );
+
+                    const verifiedAdminObj = {
+                        id: existingMeta?.id || cred.user.uid || Date.now(),
+                        username: verifiedEmail,
+                        email: verifiedEmail,
+                        password: activeInputPass,
+                        name: existingMeta?.name || cred.user.displayName || (verifiedEmail === "admin@kelas.id" ? "Admin Utama Medivance" : unameOnly.toUpperCase()),
+                        role: existingMeta?.role || "Super Admin",
+                        isSuperAdmin: existingMeta ? Boolean(existingMeta.isSuperAdmin) : true,
+                        permissions: existingMeta?.permissions || [...FALLBACK_SUPER_ADMIN.permissions]
+                    };
+
+                    collected.push(verifiedAdminObj);
+                    // Simpan ke koleksi Cloud agar login berikutnya instan (<0.05 detik)
+                    saveAdminAccountToCloud(verifiedAdminObj);
+                }
+            } catch (authErr) {
+                // Pastikan sesi anonim tetap hidup jika email/password tidak cocok di Firebase Auth
+                ensureAuthReady();
             }
-        } catch (e) {}
+        }
     }
 
-    return collected;
+    return ensureDefaultAdminPresent(collected);
 }
 
 /**
- * Listener Real-Time Lintas Perangkat
+ * LISTENER REAL-TIME INSTAN LINTAS PERANGKAT
  */
 export async function initCloudSynchronization({ onStateReceived, onAdminsReceived, onConnectionStatus }) {
     ensureAuthReady();
 
-    // 1. Listener Realtime Database
+    // Segera kirim daftar admin awal (termasuk fallback Super Admin) agar bisa langsung login
+    if (onAdminsReceived) {
+        onAdminsReceived(ensureDefaultAdminPresent([]), "init-default");
+    }
+
+    // 1. Listener Realtime Database Main State
     try {
         onValue(
             dbRef(rtdb, RTDB_MAIN_PATH),
@@ -411,7 +526,7 @@ export async function initCloudSynchronization({ onStateReceived, onAdminsReceiv
         );
     } catch (e) {}
 
-    // 3. Listener Koleksi Akun Pengurus
+    // 3. Listener Koleksi Akun Admin (RTDB & Firestore)
     try {
         onValue(
             dbRef(rtdb, RTDB_ADMINS_PATH),
@@ -423,7 +538,7 @@ export async function initCloudSynchronization({ onStateReceived, onAdminsReceiv
                     const parsed = parseAdminRecord(k, rawObj[k]);
                     if (parsed) list.push(parsed);
                 });
-                onAdminsReceived(list, "rtdb-admins");
+                if (onAdminsReceived) onAdminsReceived(ensureDefaultAdminPresent(list), "rtdb-admins");
             },
             () => {}
         );
@@ -438,7 +553,7 @@ export async function initCloudSynchronization({ onStateReceived, onAdminsReceiv
                     const parsed = parseAdminRecord(d.id, d.data());
                     if (parsed) list.push(parsed);
                 });
-                onAdminsReceived(list, "fs-art-admins");
+                if (onAdminsReceived) onAdminsReceived(ensureDefaultAdminPresent(list), "fs-art-admins");
             },
             () => {}
         );
@@ -454,14 +569,16 @@ export async function initCloudSynchronization({ onStateReceived, onAdminsReceiv
                         const parsed = parseAdminRecord(d.id, d.data());
                         if (parsed) list.push(parsed);
                     });
-                    if (list.length > 0) onAdminsReceived(list, `fs-${colName}`);
+                    if (list.length > 0 && onAdminsReceived) {
+                        onAdminsReceived(ensureDefaultAdminPresent(list), `fs-${colName}`);
+                    }
                 },
                 () => {}
             );
         } catch (e) {}
     });
 
-    // 4. Tarik snapshot awal secara paralel
+    // 4. Tarik snapshot awal terbaik secara paralel
     fetchInitialPortalStateFromCloud()
         .then((initial) => {
             if (initial && initial.state) {
@@ -506,11 +623,13 @@ async function writeToFirestorePath(mainDocRef, chunkColPath, serialized, timest
 }
 
 export async function savePortalStateToCloud(appData, actorUsername = "admin") {
-    ensureAuthReady();
+    await ensureAuthReady();
+    appData.admins = ensureDefaultAdminPresent(appData.admins);
+
     const timestamp = new Date().toISOString();
     const richness = calculateDataRichness(appData);
     lastDeliveredRevision = `${timestamp}_${richness}`;
-    if (richness > 0) hasLoadedNonEmptyData = true;
+    if (richness > 2) hasLoadedNonEmptyData = true;
 
     const serialized = JSON.stringify(appData);
 
@@ -529,21 +648,30 @@ export async function savePortalStateToCloud(appData, actorUsername = "admin") {
 }
 
 export async function saveAdminAccountToCloud(accountObj) {
-    ensureAuthReady();
-    const cleanUser = String(accountObj.username).trim().toLowerCase();
+    await ensureAuthReady();
+    const parsed = parseAdminRecord(accountObj?.username, accountObj);
+    if (!parsed) return;
+
+    const cleanUser = parsed.username.toLowerCase();
     const safeKey = cleanUser.replace(/[.#$/[\]]/g, "_");
 
+    ensureDefaultAdminPresent([parsed]);
+
     await Promise.allSettled([
-        dbSet(dbRef(rtdb, `${RTDB_ADMINS_PATH}/${safeKey}`), accountObj),
-        setDoc(doc(db, ...FS_ART_ADMINS_COL, cleanUser), accountObj),
-        setDoc(doc(db, "admins", cleanUser), accountObj)
+        dbSet(dbRef(rtdb, `${RTDB_ADMINS_PATH}/${safeKey}`), parsed),
+        setDoc(doc(db, ...FS_ART_ADMINS_COL, cleanUser), parsed),
+        setDoc(doc(db, "admins", cleanUser), parsed)
     ]);
 }
 
 export async function deleteAdminAccountFromCloud(username) {
-    ensureAuthReady();
+    await ensureAuthReady();
     const cleanUser = String(username).trim().toLowerCase();
     const safeKey = cleanUser.replace(/[.#$/[\]]/g, "_");
+
+    cachedCloudAdmins = cachedCloudAdmins.filter(
+        (a) => String(a.username).toLowerCase() !== cleanUser
+    );
 
     await Promise.allSettled([
         dbRemove(dbRef(rtdb, `${RTDB_ADMINS_PATH}/${safeKey}`)),
@@ -554,16 +682,18 @@ export async function deleteAdminAccountFromCloud(username) {
 }
 
 /**
- * Login menggunakan Firebase Authentication (Email & Password)
- * Penting untuk memverifikasi akun yang dibuat langsung di Firebase Console Authentication
+ * Mendukung pemanggilan login baik dengan (email, password) maupun sesi anonim
  */
 export async function loginWithFirebaseAuth(email, password) {
-    return await signInWithEmailAndPassword(auth, email, password);
+    if (email && password) {
+        return await signInWithEmailAndPassword(auth, email, password);
+    }
+    const user = await ensureAuthReady();
+    return { user };
 }
 
 /**
- * Logout dari sesi Admin lalu langsung aktifkan kembali sesi Anonim
- * agar pembacaan data publik tidak terputus
+ * Keluar dari sesi admin dan langsung mengaktifkan kembali sesi baca anonim
  */
 export async function logoutFirebaseSession() {
     try {
